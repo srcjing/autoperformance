@@ -1,0 +1,16 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+  mode: "release"            # debug | release | test
+
+database:
+  host: "127.0.0.1"
+  port: 5432
+  user: "postgres"
+  password: "postgres"
+  name: "auto_performance"
+  sslmode: "disable"
+
+jwt:
+  secret: "auto_performance-dev-secret-change-me"   # 生产环境务必通过环境变量覆盖
+  expire_seconds: 86400                             # token 有效期（秒）

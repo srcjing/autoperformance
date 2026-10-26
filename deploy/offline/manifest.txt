@@ -1,0 +1,32 @@
+auto_performance 离线包清单（manifest）
+======================================
+
+版本:       0.1.0
+构建平台:   linux/amd64（可扩展 arm64）
+目标环境:   无外网、无预装运行时
+
+依赖版本（构建期 / 运行期）:
+  Go          1.26.5         （编译进二进制，运行期无需）
+  Node        v24.15.0       （仅构建期）
+  npm         11.14.1        （仅构建期）
+  PostgreSQL  16.x           （离线运行时，install.sh 初始化）
+  k6          v0.x           （压测引擎，随包分发 bin/k6）
+  Chromium    headless       （PDF 渲染，随包分发 runtime/chromium/）
+
+产物:
+  bin/auto_performance      后端单二进制（内嵌前端 + 报告模板）
+  bin/k6                    压测引擎二进制（后续随包）
+  runtime/chromium/         headless Chromium（后续随包）
+  runtime/postgres/         PostgreSQL 离线安装包/二进制（后续随包）
+  config/config.yaml        默认配置
+  scripts/install.sh        安装脚本
+  scripts/upgrade.sh        升级脚本（含数据迁移/回滚）
+  scripts/uninstall.sh      卸载脚本（--keep-data / --purge-data）
+
+校验:
+  auto_performance-offline-<version>.tar.gz.sha256
+    SHA256 校验和（build-offline.sh 自动生成，安装前先校验完整性）
+
+说明:
+  - 后端依赖全部内嵌进单二进制（Go 静态编译 + go:embed 前端/模板）。
+  - k6 / Chromium / PostgreSQL 为外部依赖，随包分发并配置路径调用（见 architecture.md §6.3）。

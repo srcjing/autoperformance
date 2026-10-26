@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>auto_performance · 性能测试平台 · 设计原型</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --ink:#0c1311;
+  --ink-2:#121b18;
+  --ink-3:#1a2521;
+  --bg:#f3f5f4;
+  --surface:#ffffff;
+  --border:#e5e9e7;
+  --border-2:#d5dbd8;
+  --text:#1a201d;
+  --muted:#66716c;
+  --faint:#9aa39f;
+  --accent:#059669;
+  --accent-strong:#047857;
+  --accent-soft:#ecfdf5;
+  --accent-border:#a7f3d0;
+  --warn:#d97706;
+  --warn-soft:#fffbeb;
+  --warn-border:#fde68a;
+  --danger:#e11d48;
+  --danger-soft:#fff1f2;
+  --danger-border:#fecdd3;
+  --info:#2563eb;
+  --info-soft:#eff6ff;
+  --info-border:#bfdbfe;
+  --neutral:#64748b;
+  --neutral-soft:#f1f5f9;
+  --mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans:'IBM Plex Sans', system-ui, -apple-system, "Segoe UI", sans-serif;
+  --shadow-sm:0 1px 2px rgba(16,24,20,.05);
+  --shadow:0 1px 3px rgba(16,24,20,.06), 0 8px 24px -12px rgba(16,24,20,.12);
+  --radius:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--sans);
+  background:var(--bg);
+  color:var(--text);
+  font-size:14px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;font-size:inherit;color:inherit}
+a{color:inherit;text-decoration:none}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#c8cecb;border-radius:6px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:#a9b2ae;border:2px solid transparent;background-clip:content-box}
+
+/* ============ LOGIN ============ */
+#login{position:fixed;inset:0;display:grid;place-items:center;background:
+  radial-gradient(1200px 600px at 85% -10%, rgba(5,150,105,.14), transparent 55%),
+  radial-gradient(900px 500px at -10% 110%, rgba(37,99,235,.10), transparent 50%),
+  var(--ink);}
+.login-panel{width:400px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 30px 80px -20px rgba(0,0,0,.5);padding:36px;animation:rise .5s cubic-bezier(.2,.8,.2,1)}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.brand{display:flex;align-items:center;gap:11px;margin-bottom:6px}
+.brand-mark{width:34px;height:34px;border-radius:9px;background:var(--accent);display:grid;place-items:center;color:#fff;box-shadow:0 4px 14px -4px rgba(5,150,105,.7)}
+.brand-name{font-weight:700;font-size:17px;letter-spacing:-.01em}
+.brand-sub{font-size:12.5px;color:var(--muted)}
+.field{margin-top:18px}
+.field label{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:7px;letter-spacing:.01em}
+.input{width:100%;height:42px;border:1px solid var(--border-2);border-radius:9px;padding:0 13px;font-size:14px;font-family:inherit;background:#fbfcfc;transition:.15s}
+.input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);background:#fff}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:38px;padding:0 16px;border-radius:9px;font-weight:600;font-size:13.5px;transition:.15s;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-strong)}
+.btn-ghost{background:#fff;border:1px solid var(--border-2);color:var(--text)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-danger{background:#fff;border:1px solid var(--danger-border);color:var(--danger)}
+.btn-danger:hover{background:var(--danger-soft)}
+.btn-sm{height:30px;padding:0 11px;font-size:12.5px;border-radius:7px}
+.login-foot{display:flex;justify-content:space-between;align-items:center;margin-top:22px}
+
+/* ============ APP SHELL ============ */
+#app{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:236px;flex:none;background:var(--ink);color:#cdd6d1;display:flex;flex-direction:column;border-right:1px solid #1c2622}
+.side-head{display:flex;align-items:center;gap:10px;padding:18px 18px 14px}
+.side-head .brand-name{color:#f2f5f4}
+.side-head .brand-sub{color:#7b8781;font-size:11.5px}
+.nav{flex:1;overflow-y:auto;padding:4px 10px 16px}
+.nav-group{margin-top:4px}
+.nav-group-title{display:flex;align-items:center;justify-content:space-between;gap:6px;width:100%;padding:9px 10px;font-size:12px;font-weight:600;letter-spacing:.04em;color:#7b8781;border-radius:8px;transition:.15s}
+.nav-group-title:hover{color:#cdd6d1}
+.nav-group-title .caret{transition:transform .2s}
+.nav-group.collapsed .caret{transform:rotate(-90deg)}
+.nav-group.collapsed .nav-items{display:none}
+.nav-items{display:flex;flex-direction:column;gap:1px;margin-top:2px;padding-left:6px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:7.5px 10px;border-radius:8px;color:#9aa79f;font-size:13.5px;transition:.14s;border-left:2px solid transparent}
+.nav-item:hover{color:#e6ebe9;background:rgba(255,255,255,.04)}
+.nav-item.active{color:#fff;background:rgba(5,150,105,.14);border-left-color:var(--accent)}
+.nav-item svg{flex:none;opacity:.9}
+.nav-badge{margin-left:auto;font-size:10.5px;font-family:var(--mono);color:#7b8781}
+.side-foot{padding:12px 14px;border-top:1px solid #1c2622;font-size:12px;color:#6f7b75;display:flex;align-items:center;gap:8px}
+
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.header{height:56px;flex:none;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;padding:0 20px}
+.crumb{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:7px}
+.crumb b{color:var(--text);font-weight:600}
+.crumb-sep{color:var(--faint)}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.search{display:flex;align-items:center;gap:8px;height:34px;width:220px;padding:0 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:13px}
+.icon-btn{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;color:var(--muted);transition:.14s}
+.icon-btn:hover{background:var(--bg);color:var(--text)}
+.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#059669,#0ea5e9);color:#fff;display:grid;place-items:center;font-weight:600;font-size:13px}
+.content{flex:1;overflow-y:auto;padding:22px 26px 40px}
+.page{display:none;animation:fade .28s ease}
+.page.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.page-head{margin-bottom:18px}
+.page-title{font-size:20px;font-weight:700;letter-spacing:-.02em}
+.page-desc{color:var(--muted);font-size:13.5px;margin-top:3px}
+
+/* ============ COMPONENTS ============ */
+.grid{display:grid;gap:16px}
+.cols-4{grid-template-columns:repeat(4,1fr)}
+.cols-3{grid-template-columns:repeat(3,1fr)}
+.cols-2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:1100px){.cols-4,.cols-3{grid-template-columns:repeat(2,1fr)}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+.card-pad{padding:18px}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
+.card-title{font-size:14px;font-weight:600}
+.stat{padding:16px 18px}
+.stat-label{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:7px}
+.stat-value{font-family:var(--mono);font-size:26px;font-weight:600;letter-spacing:-.02em;margin-top:8px}
+.stat-delta{font-size:12px;margin-top:5px;display:flex;align-items:center;gap:5px}
+.delta-up{color:var(--accent)}
+.delta-down{color:var(--danger)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+thead th{text-align:left;font-size:11.5px;font-weight:600;letter-spacing:.04em;color:var(--muted);text-transform:uppercase;padding:11px 18px;border-bottom:1px solid var(--border);white-space:nowrap;background:#fafbfb}
+tbody td{padding:12px 18px;border-bottom:1px solid var(--border);vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#fafbfb}
+.cell-strong{font-weight:600}
+.cell-sub{font-size:12px;color:var(--muted);margin-top:1px}
+.badge{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:99px;font-size:11.5px;font-weight:600}
+.badge-success{background:var(--accent-soft);color:var(--accent-strong);border:1px solid var(--accent-border)}
+.badge-warn{background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn-border)}
+.badge-danger{background:var(--danger-soft);color:var(--danger);border:1px solid var(--danger-border)}
+.badge-info{background:var(--info-soft);color:var(--info);border:1px solid var(--info-border)}
+.badge-neutral{background:var(--neutral-soft);color:var(--neutral);border:1px solid var(--border-2)}
+.tag{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:6px;font-size:12px;font-weight:500;background:var(--neutral-soft);color:#3f4a46}
+.tag .dot{width:6px;height:6px}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);padding:0 18px}
+.tab{padding:11px 14px;font-size:13.5px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.active{color:var(--text);border-bottom-color:var(--accent);font-weight:600}
+.tab-pane{display:none;padding:18px}
+.tab-pane.active{display:block}
+.filter-bar{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border-radius:8px;border:1px solid var(--border-2);background:#fff;font-size:12.5px;color:var(--muted)}
+.ops{display:flex;align-items:center;gap:6px}
+.ops .link{font-size:12.5px;color:var(--accent);font-weight:500;padding:4px 7px;border-radius:6px}
+.ops .link:hover{background:var(--accent-soft)}
+.ops .link.danger{color:var(--danger)}
+.ops .link.danger:hover{background:var(--danger-soft)}
+.progress{height:6px;background:var(--neutral-soft);border-radius:4px;overflow:hidden;width:120px}
+.progress i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:0;font-size:13px}
+.kv dt{color:var(--muted);padding:9px 16px;border-bottom:1px solid var(--border)}
+.kv dd{padding:9px 16px;border-bottom:1px solid var(--border)}
+.pipeline{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+.stage{flex:1;min-width:130px;border:1px solid var(--border);border-radius:10px;padding:12px;position:relative}
+.stage + .stage{margin-left:26px}
+.stage + .stage::before{content:'';position:absolute;left:-26px;top:50%;width:26px;height:1px;background:var(--border-2)}
+.stage-num{font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:600}
+.stage-name{font-weight:600;font-size:13px;margin-top:4px}
+.stage-meta{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5}
+.empty{padding:48px;text-align:center;color:var(--muted)}
+.log-line{font-family:var(--mono);font-size:12.5px;padding:7px 18px;border-bottom:1px solid #f0f2f1;display:flex;gap:12px}
+.log-time{color:var(--faint);flex:none}
+.log-lvl{flex:none;width:56px;font-weight:600}
+.lvl-info{color:var(--info)}
+.lvl-warn{color:var(--warn)}
+.lvl-error{color:var(--danger)}
+.lvl-debug{color:var(--muted)}
+.log-msg{color:#33413b;word-break:break-all}
+.viewer{height:340px;background:#fbfcfc;border:1px dashed var(--border-2);border-radius:10px;display:grid;place-items:center;color:var(--muted);font-size:13px}
+.toolbar{display:flex;align-items:center;gap:8px}
+.spark{width:100%;height:44px}
+.drawer-mask{position:fixed;inset:0;background:rgba(12,19,17,.42);z-index:40;opacity:0;pointer-events:none;transition:opacity .2s}
+.drawer-mask.show{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;height:100%;width:430px;max-width:94vw;background:var(--surface);box-shadow:-24px 0 70px -24px rgba(0,0,0,.35);z-index:41;transform:translateX(102%);transition:transform .26s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column}
+.drawer.show{transform:none}
+.drawer-head{display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border)}
+.drawer-title{font-size:16px;font-weight:700}
+.drawer-body{flex:1;overflow-y:auto;padding:18px 20px}
+.drawer-foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid var(--border)}
+.perm-hint{font-size:12.5px;color:var(--accent-strong);background:var(--accent-soft);border:1px solid var(--accent-border);border-radius:8px;padding:10px 12px;margin-bottom:16px;line-height:1.5}
+.perm-row{display:flex;align-items:center;justify-content:space-between;padding:11px 2px;border-bottom:1px solid var(--border)}
+.perm-row:last-child{border-bottom:none}
+.perm-name{font-size:13.5px;font-weight:500}
+.perm-name .sub{display:block;font-size:11px;color:var(--faint);font-weight:400;margin-top:1px}
+.seg{display:inline-flex;background:var(--neutral-soft);border-radius:8px;padding:2px;gap:2px;flex:none}
+.seg button{height:26px;padding:0 11px;border-radius:6px;font-size:12px;font-weight:500;color:var(--muted);transition:.12s}
+.seg button:disabled{cursor:not-allowed;opacity:.9}
+.seg button.on-none{background:#fff;color:var(--neutral);box-shadow:var(--shadow-sm)}
+.seg button.on-read{background:var(--info-soft);color:var(--info);box-shadow:var(--shadow-sm)}
+.seg button.on-write{background:var(--accent);color:#fff}
+#toast{position:fixed;top:18px;left:50%;transform:translate(-50%,-20px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;z-index:60;opacity:0;pointer-events:none;transition:.2s;box-shadow:0 10px 30px -10px rgba(0,0,0,.5)}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+textarea.input{font-family:inherit}
+.role-checks{display:flex;flex-direction:column;gap:9px}
+.check{display:flex;align-items:center;gap:9px;font-size:13.5px;cursor:pointer;user-select:none}
+.check input{accent-color:var(--accent);width:16px;height:16px}
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="login">
+  <div class="login-panel">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg>
+      </div>
+      <div>
+        <div class="brand-name">auto_performance</div>
+        <div class="brand-sub">性能测试平台 · Performance Testing Platform</div>
+      </div>
+    </div>
+    <div class="field">
+      <label>管理员账号</label>
+      <input class="input" value="admin" placeholder="admin" />
+    </div>
+    <div class="field">
+      <label>密码</label>
+      <input class="input" type="password" value="••••••••" />
+    </div>
+    <div class="login-foot">
+      <span class="brand-sub" style="font-size:12px">版本 v0.1.0 · 离线部署包</span>
+      <button class="btn btn-primary" onclick="login()">登 录</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app" style="display:none">
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand-mark"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg></div>
+      <div>
+        <div class="brand-name" style="font-size:15px">auto_performance</div>
+        <div class="brand-sub">性能测试平台</div>
+      </div>
+    </div>
+    <nav class="nav" id="nav">
+      <a class="nav-item active" data-route="#/overview">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        概览
+      </a>
+
+      <div class="nav-group">
+        <button class="nav-group-title" onclick="toggleGroup(this)">
+          <span>环境管理</span><svg class="caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="nav-items">
+          <a class="nav-item" data-route="#/environments/list"><span>环境列表</span></a>
+          <a class="nav-item" data-route="#/environments/tags"><span>标签维护</span></a>
+        </div>
+      </div>
+
+      <div class="nav-group">
+        <button class="nav-group-title" onclick="toggleGroup(this)">
+          <span>产品管理</span><svg class="caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="nav-items">
+          <a class="nav-item" data-route="#/products/list"><span>产品列表</span></a>
+          <a class="nav-item" data-route="#/products/interfaces"><span>接口管理</span></a>
+        </div>
+      </div>
+
+      <div class="nav-group">
+        <button class="nav-group-title" onclick="toggleGroup(this)">
+          <span>测试管理</span><svg class="caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="nav-items">
+          <a class="nav-item" data-route="#/testing/tasks"><span>测试任务</span></a>
+          <a class="nav-item" data-route="#/testing/templates"><span>预设模板</span></a>
+        </div>
+      </div>
+
+      <div class="nav-group">
+        <button class="nav-group-title" onclick="toggleGroup(this)">
+          <span>报告管理</span><svg class="caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="nav-items">
+          <a class="nav-item" data-route="#/reports/list"><span>报告列表</span></a>
+        </div>
+      </div>
+
+      <div class="nav-group">
+        <button class="nav-group-title" onclick="toggleGroup(this)">
+          <span>日志管理</span><svg class="caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="nav-items">
+          <a class="nav-item" data-route="#/logs"><span>日志中心</span></a>
+        </div>
+      </div>
+
+      <div class="nav-group">
+        <button class="nav-group-title" onclick="toggleGroup(this)">
+          <span>系统设置</span><svg class="caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="nav-items">
+          <a class="nav-item" data-route="#/settings"><span>系统设置</span></a>
+        </div>
+      </div>
+    </nav>
+    <div class="side-foot">
+      <span class="dot" style="background:var(--accent)"></span> 服务运行中 · 离线模式
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="header">
+      <div class="crumb" id="crumb">概览</div>
+      <div class="header-right">
+        <div class="search">⌘K 搜索…</div>
+        <button class="icon-btn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg></button>
+        <div class="avatar">A</div>
+      </div>
+    </header>
+
+    <main class="content">
+
+      <!-- ===== 概览 ===== -->
+      <section class="page active" id="page-overview">
+        <div class="page-head">
+          <div class="page-title">概览</div>
+          <div class="page-desc">环境、产品、测试任务与报告的运行态势</div>
+        </div>
+        <div class="grid cols-4">
+          <div class="card stat"><div class="stat-label"><span class="dot" style="background:var(--accent)"></span>待测环境</div><div class="stat-value">12</div><div class="stat-delta delta-up">↑ 3 本周新增</div></div>
+          <div class="card stat"><div class="stat-label"><span class="dot" style="background:var(--info)"></span>在册接口</div><div class="stat-value">86</div><div class="stat-delta">跨 5 个产品</div></div>
+          <div class="card stat"><div class="stat-label"><span class="dot" style="background:var(--warn)"></span>运行中任务</div><div class="stat-value">3</div><div class="stat-delta delta-up">↑ 2 今日</div></div>
+          <div class="card stat"><div class="stat-label"><span class="dot" style="background:var(--danger)"></span>未达标接口</div><div class="stat-value">7</div><div class="stat-delta delta-down">需关注</div></div>
+        </div>
+        <div class="grid cols-2" style="margin-top:16px">
+          <div class="card">
+            <div class="card-head"><span class="card-title">吞吐与延迟趋势（近 7 次任务）</span><span class="badge badge-neutral">P95 延迟</span></div>
+            <div class="card-pad">
+              <svg class="spark" viewBox="0 0 400 80" preserveAspectRatio="none">
+                <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#059669" stop-opacity=".25"/><stop offset="1" stop-color="#059669" stop-opacity="0"/></linearGradient></defs>
+                <path d="M0,62 C30,58 45,40 70,44 C95,48 110,30 140,34 C170,38 185,52 210,40 C235,28 255,34 280,22 C305,10 325,18 350,14 C370,11 385,16 400,8 L400,80 L0,80 Z" fill="url(#g)"/>
+                <path d="M0,62 C30,58 45,40 70,44 C95,48 110,30 140,34 C170,38 185,52 210,40 C235,28 255,34 280,22 C305,10 325,18 350,14 C370,11 385,16 400,8" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><span class="card-title">最近测试任务</span><span class="ops"><a class="link" href="#/testing/tasks">查看全部 →</a></span></div>
+            <div class="table-wrap"><table>
+              <tbody>
+                <tr><td><div class="cell-strong">支付网关 · 高峰压测</div><div class="cell-sub">集群环境 · 12 接口</div></td><td><span class="badge badge-success">已完成</span></td><td class="mono" style="color:var(--muted)">2 小时前</td></tr>
+                <tr><td><div class="cell-strong">用户中心 · 冒烟回归</div><div class="cell-sub">单机环境 · 8 接口</div></td><td><span class="badge badge-info">运行中</span></td><td class="mono" style="color:var(--muted)">进行中</td></tr>
+                <tr><td><div class="cell-strong">订单服务 · 稳定性长稳</div><div class="cell-sub">集群环境 · 20 接口</div></td><td><span class="badge badge-warn">排队中</span></td><td class="mono" style="color:var(--muted)">刚刚</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 环境列表 ===== -->
+      <section class="page" id="page-env-list">
+        <div class="page-head" style="display:flex;align-items:flex-end;justify-content:space-between">
+          <div><div class="page-title">环境列表</div><div class="page-desc">配置完成的待测环境及其配置信息</div></div>
+          <button class="btn btn-primary btn-sm">+ 新建环境</button>
+        </div>
+        <div class="card">
+          <div class="filter-bar">
+            <span class="chip">分类：全部 ▾</span><span class="chip">标签：全部 ▾</span>
+            <input class="input" style="height:30px;width:200px" placeholder="搜索环境名 / 地址" />
+          </div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>环境名称</th><th>分类</th><th>标签</th><th>地址</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr><td><div class="cell-strong">生产集群</div><div class="cell-sub">支付网关生产</div></td><td><span class="badge badge-info">集群</span></td><td><span class="tag"><span class="dot" style="background:#059669"></span>生产</span> <span class="tag"><span class="dot" style="background:#2563eb"></span>高可用</span></td><td class="mono" style="font-size:12px">10.20.1.0/24</td><td><span class="badge badge-success">在线</span></td><td class="mono" style="color:var(--muted);font-size:12px">2026-10-25</td><td class="ops"><a class="link">详情</a><a class="link">编辑</a><a class="link danger">删除</a></td></tr>
+              <tr><td><div class="cell-strong">测试单机</div><div class="cell-sub">用户中心测试</div></td><td><span class="badge badge-neutral">单机</span></td><td><span class="tag"><span class="dot" style="background:#d97706"></span>测试</span></td><td class="mono" style="font-size:12px">10.20.3.15</td><td><span class="badge badge-success">在线</span></td><td class="mono" style="color:var(--muted);font-size:12px">2026-10-24</td><td class="ops"><a class="link">详情</a><a class="link">编辑</a><a class="link danger">删除</a></td></tr>
+              <tr><td><div class="cell-strong">预发集群</div><div class="cell-sub">订单服务预发</div></td><td><span class="badge badge-info">集群</span></td><td><span class="tag"><span class="dot" style="background:#9333ea"></span>预发</span> <span class="tag"><span class="dot" style="background:#2563eb"></span>高可用</span></td><td class="mono" style="font-size:12px">10.30.1.0/24</td><td><span class="badge badge-warn">维护中</span></td><td class="mono" style="color:var(--muted);font-size:12px">2026-10-22</td><td class="ops"><a class="link">详情</a><a class="link">编辑</a><a class="link danger">删除</a></td></tr>
+              <tr><td><div class="cell-strong">压测沙箱</div><div class="cell-sub">独立压测环境</div></td><td><span class="badge badge-neutral">单机</span></td><td><span class="tag"><span class="dot" style="background:#64748b"></span>沙箱</span></td><td class="mono" style="font-size:12px">10.40.8.8</td><td><span class="badge badge-danger">离线</span></td><td class="mono" style="color:var(--muted);font-size:12px">2026-10-18</td><td class="ops"><a class="link">详情</a><a class="link">编辑</a><a class="link danger">删除</a></td></tr>
+            </tbody>
+          </table></div>
+        </div>
+      </section>
+
+      <!-- ===== 标签维护 ===== -->
+      <section class="page" id="page-tags">
+        <div class="page-head" style="display:flex;align-items:flex-end;justify-content:space-between">
+          <div><div class="page-title">标签维护</div><div class="page-desc">自定义标签，每个标签展示其关联的环境</div></div>
+          <button class="btn btn-primary btn-sm">+ 新建标签</button>
+        </div>
+        <div class="grid cols-3">
+          <div class="card"><div class="card-pad">
+            <div style="display:flex;justify-content:space-between;align-items:center"><span class="tag" style="height:26px"><span class="dot" style="background:#059669"></span>生产</span><span class="ops"><a class="link">编辑</a><a class="link danger">删除</a></span></div>
+            <div style="font-size:13px;color:var(--muted);margin:14px 0 6px">关联环境 · <b style="color:var(--text)">3</b></div>
+            <div class="cell-sub">生产集群 · 支付网关生产</div><div class="cell-sub">生产集群 · 订单服务</div><div class="cell-sub">生产集群 · 用户中心</div>
+          </div></div>
+          <div class="card"><div class="card-pad">
+            <div style="display:flex;justify-content:space-between;align-items:center"><span class="tag" style="height:26px"><span class="dot" style="background:#2563eb"></span>高可用</span><span class="ops"><a class="link">编辑</a><a class="link danger">删除</a></span></div>
+            <div style="font-size:13px;color:var(--muted);margin:14px 0 6px">关联环境 · <b style="color:var(--text)">2</b></div>
+            <div class="cell-sub">生产集群 · 支付网关生产</div><div class="cell-sub">预发集群 · 订单服务预发</div>
+          </div></div>
+          <div class="card"><div class="card-pad">
+            <div style="display:flex;justify-content:space-between;align-items:center"><span class="tag" style="height:26px"><span class="dot" style="background:#d97706"></span>测试</span><span class="ops"><a class="link">编辑</a><a class="link danger">删除</a></span></div>
+            <div style="font-size:13px;color:var(--muted);margin:14px 0 6px">关联环境 · <b style="color:var(--text)">1</b></div>
+            <div class="cell-sub">测试单机 · 用户中心测试</div>
+          </div></div>
+          <div class="card"><div class="card-pad">
+            <div style="display:flex;justify-content:space-between;align-items:center"><span class="tag" style="height:26px"><span class="dot" style="background:#9333ea"></span>预发</span><span class="ops"><a class="link">编辑</a><a class="link danger">删除</a></span></div>
+            <div style="font-size:13px;color:var(--muted);margin:14px 0 6px">关联环境 · <b style="color:var(--text)">1</b></div>
+            <div class="cell-sub">预发集群 · 订单服务预发</div>
+          </div></div>
+          <div class="card"><div class="card-pad">
+            <div style="display:flex;justify-content:space-between;align-items:center"><span class="tag" style="height:26px"><span class="dot" style="background:#64748b"></span>沙箱</span><span class="ops"><a class="link">编辑</a><a class="link danger">删除</a></span></div>
+            <div style="font-size:13px;color:var(--muted);margin:14px 0 6px">关联环境 · <b style="color:var(--text)">1</b></div>
+            <div class="cell-sub">压测沙箱 · 独立压测环境</div>
+          </div></div>
+        </div>
+      </section>
+
+      <!-- ===== 产品列表 ===== -->
+      <section class="page" id="page-products">
+        <div class="page-head" style="display:flex;align-items:flex-end;justify-content:space-between">
+          <div><div class="page-title">产品列表</div><div class="page-desc">创建与维护待测产品信息</div></div>
+          <button class="btn btn-primary btn-sm">+ 新建产品</button>
+        </div>
+        <div class="card"><div class="table-wrap"><table>
+          <thead><tr><th>产品名称</th><th>版本</th><th>平台</th><th>接口数</th><th>负责人</th><th>更新时间</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td><div class="cell-strong">支付网关</div><div class="cell-sub">Payment Gateway</div></td><td class="mono">v3.4.2</td><td><span class="badge badge-neutral">Linux x86_64</span></td><td class="mono">18</td><td>张三</td><td class="mono" style="color:var(--muted);font-size:12px">2026-10-25</td><td class="ops"><a class="link">接口管理</a><a class="link">编辑</a><a class="link danger">删除</a></td></tr>
+            <tr><td><div class="cell-strong">用户中心</div><div class="cell-sub">User Center</div></td><td class="mono">v2.8.0</td><td><span class="badge badge-neutral">Linux arm64</span></td><td class="mono">14</td><td>李四</td><td class="mono" style="color:var(--muted);font-size:12px">2026-10-23</td><td class="ops"><a class="link">接口管理</a><a class="link">编辑</a><a class="link danger">删除</a></td></tr>
+            <tr><td><div class="cell-strong">订单服务</div><div class="cell-sub">Order Service</div></td><td class="mono">v1.15.3</td><td><span class="badge badge-neutral">Linux x86_64</span></td><td class="mono">26</td><td>王五</td><td class="mono" style="color:var(--muted);font-size:12px">2026-10-20</td><td class="ops"><a class="link">接口管理</a><a class="link">编辑</a><a class="link danger">删除</a></td></tr>
+            <tr><td><div class="cell-strong">消息中间件</div><div class="cell-sub">Message Broker</div></td><td class="mono">v5.2.1</td><td><span class="badge badge-neutral">跨平台</span></td><td class="mono">9</td><td>赵六</td><td class="mono" style="color:var(--muted);font-size:12px">2026-10-15</td><td class="ops"><a class="link">接口管理</a><a class="link">编辑</a><a class="link danger">删除</a></td></tr>
+          </tbody>
+        </table></div></div>
+      </section>
+
+      <!-- ===== 接口管理 ===== -->
+      <section class="page" id="page-interfaces">
+        <div class="page-head" style="display:flex;align-items:flex-end;justify-content:space-between">
+          <div><div class="page-title">接口管理</div><div class="page-desc">支付网关 · 维护接口地址与关键指标阈值</div></div>
+          <button class="btn btn-primary btn-sm">+ 新增接口</button>
+        </div>
+        <div class="card"><div class="table-wrap"><table>
+          <thead><tr><th>接口</th><th>方法</th><th>地址</th><th>QPS 阈值</th><th>P95 阈值</th><th>错误率阈值</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td><div class="cell-strong">创建订单</div></td><td><span class="badge badge-success">POST</span></td><td class="mono" style="font-size:12px">/api/order/create</td><td class="mono">≥ 500</td><td class="mono">≤ 200ms</td><td class="mono">≤ 1%</td><td><span class="badge badge-success">达标</span></td><td class="ops"><a class="link">编辑阈值</a><a class="link danger">删除</a></td></tr>
+            <tr><td><div class="cell-strong">查询订单详情</div></td><td><span class="badge badge-info">GET</span></td><td class="mono" style="font-size:12px">/api/order/{id}</td><td class="mono">≥ 800</td><td class="mono">≤ 150ms</td><td class="mono">≤ 0.5%</td><td><span class="badge badge-success">达标</span></td><td class="ops"><a class="link">编辑阈值</a><a class="link danger">删除</a></td></tr>
+            <tr><td><div class="cell-strong">支付回调</div></td><td><span class="badge badge-success">POST</span></td><td class="mono" style="font-size:12px">/api/pay/notify</td><td class="mono">≥ 300</td><td class="mono">≤ 300ms</td><td class="mono">≤ 2%</td><td><span class="badge badge-danger">未达标</span></td><td class="ops"><a class="link">编辑阈值</a><a class="link danger">删除</a></td></tr>
+            <tr><td><div class="cell-strong">退款申请</div></td><td><span class="badge badge-success">POST</span></td><td class="mono" style="font-size:12px">/api/refund/apply</td><td class="mono">≥ 200</td><td class="mono">≤ 400ms</td><td class="mono">≤ 1%</td><td><span class="badge badge-warn">待评估</span></td><td class="ops"><a class="link">编辑阈值</a><a class="link danger">删除</a></td></tr>
+          </tbody>
+        </table></div></div>
+      </section>
+
+      <!-- ===== 测试任务 ===== -->
+      <section class="page" id="page-tasks">
+        <div class="page-head" style="display:flex;align-items:flex-end;justify-content:space-between">
+          <div><div class="page-title">测试任务</div><div class="page-desc">编排环境、接口范围、流程、报告与环境清理</div></div>
+          <button class="btn btn-primary btn-sm">+ 新建任务</button>
+        </div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-head"><span class="card-title">任务编排流水线（支付网关 · 高峰压测）</span><span class="badge badge-info">运行中</span></div>
+          <div class="card-pad">
+            <div class="pipeline">
+              <div class="stage"><div class="stage-num">STAGE 1</div><div class="stage-name">准备环境</div><div class="stage-meta">生产集群<br/>12 个接口就绪</div></div>
+              <div class="stage"><div class="stage-num">STAGE 2</div><div class="stage-name">执行压测</div><div class="stage-meta">阶梯加压 0→500 QPS<br/>持续 10 min</div></div>
+              <div class="stage"><div class="stage-num">STAGE 3</div><div class="stage-name">采集评估</div><div class="stage-meta">阈值判定<br/>P95 / 错误率</div></div>
+              <div class="stage"><div class="stage-num">STAGE 4</div><div class="stage-name">输出报告</div><div class="stage-meta">HTML / PDF / Word</div></div>
+              <div class="stage"><div class="stage-num">STAGE 5</div><div class="stage-name">环境清理</div><div class="stage-meta">释放资源<br/>回滚配置</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="card"><div class="table-wrap"><table>
+          <thead><tr><th>任务名称</th><th>环境</th><th>接口范围</th><th>模板</th><th>进度</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td><div class="cell-strong">支付网关 · 高峰压测</div><div class="cell-sub">创建于 2026-10-26</div></td><td class="mono" style="font-size:12px">生产集群</td><td>12 接口</td><td>高峰压测模板</td><td><div class="progress"><i style="width:72%"></i></div></td><td><span class="badge badge-info">运行中</span></td><td class="ops"><a class="link">详情</a><a class="link">停止</a></td></tr>
+            <tr><td><div class="cell-strong">用户中心 · 冒烟回归</div><div class="cell-sub">创建于 2026-10-25</div></td><td class="mono" style="font-size:12px">测试单机</td><td>8 接口</td><td>冒烟模板</td><td><div class="progress"><i style="width:100%"></i></div></td><td><span class="badge badge-success">已完成</span></td><td class="ops"><a class="link">详情</a><a class="link">报告</a></td></tr>
+            <tr><td><div class="cell-strong">订单服务 · 稳定性长稳</div><div class="cell-sub">创建于 2026-10-26</div></td><td class="mono" style="font-size:12px">预发集群</td><td>20 接口</td><td>长稳模板</td><td><div class="progress"><i style="width:0%"></i></div></td><td><span class="badge badge-warn">排队中</span></td><td class="ops"><a class="link">详情</a><a class="link danger">取消</a></td></tr>
+          </tbody>
+        </table></div></div>
+      </section>
+
+      <!-- ===== 预设模板 ===== -->
+      <section class="page" id="page-templates">
+        <div class="page-head" style="display:flex;align-items:flex-end;justify-content:space-between">
+          <div><div class="page-title">预设模板</div><div class="page-desc">可复用的测试编排模板</div></div>
+          <button class="btn btn-primary btn-sm">+ 新建模板</button>
+        </div>
+        <div class="grid cols-3">
+          <div class="card"><div class="card-pad"><div class="cell-strong" style="font-size:14px">高峰压测模板</div><div class="cell-sub" style="margin:6px 0 12px">阶梯加压 · 10min · 阈值评估 · 清理</div><span class="badge badge-neutral">默认</span></div></div>
+          <div class="card"><div class="card-pad"><div class="cell-strong" style="font-size:14px">冒烟测试模板</div><div class="cell-sub" style="margin:6px 0 12px">快速校验 · 单档位 · 3min</div><span class="badge badge-neutral">内置</span></div></div>
+          <div class="card"><div class="card-pad"><div class="cell-strong" style="font-size:14px">稳定性长稳模板</div><div class="cell-sub" style="margin:6px 0 12px">恒定压力 · 2h · 自动报告</div><span class="badge badge-neutral">内置</span></div></div>
+        </div>
+      </section>
+
+      <!-- ===== 报告管理 ===== -->
+      <section class="page" id="page-reports">
+        <div class="page-head" style="display:flex;align-items:flex-end;justify-content:space-between">
+          <div><div class="page-title">报告管理</div><div class="page-desc">解析测试数据生成报告，支持在线/离线读取、导入导出</div></div>
+          <div class="toolbar"><button class="btn btn-ghost btn-sm">导入报告</button><button class="btn btn-primary btn-sm">+ 生成报告</button></div>
+        </div>
+        <div class="card" style="margin-bottom:16px"><div class="table-wrap"><table>
+          <thead><tr><th>报告名称</th><th>关联任务</th><th>格式</th><th>达标情况</th><th>生成时间</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td><div class="cell-strong">支付网关-高峰压测-20261026</div></td><td class="cell-sub">支付网关 · 高峰压测</td><td><span class="badge badge-neutral">HTML</span> <span class="badge badge-neutral">PDF</span></td><td><span class="badge badge-danger">7 未达标</span></td><td class="mono" style="color:var(--muted);font-size:12px">2026-10-26 14:32</td><td class="ops"><a class="link">在线查看</a><a class="link">导出</a><a class="link danger">删除</a></td></tr>
+            <tr><td><div class="cell-strong">用户中心-冒烟-20261025</div></td><td class="cell-sub">用户中心 · 冒烟回归</td><td><span class="badge badge-neutral">HTML</span> <span class="badge badge-neutral">PDF</span> <span class="badge badge-neutral">Word</span></td><td><span class="badge badge-success">全部达标</span></td><td class="mono" style="color:var(--muted);font-size:12px">2026-10-25 10:08</td><td class="ops"><a class="link">在线查看</a><a class="link">导出</a><a class="link danger">删除</a></td></tr>
+          </tbody>
+        </table></div></div>
+        <div class="card">
+          <div class="card-head"><span class="card-title">在线查看 · 支付网关-高峰压测-20261026</span><div class="toolbar"><button class="btn btn-ghost btn-sm">HTML</button><button class="btn btn-primary btn-sm">PDF</button></div></div>
+          <div class="card-pad">
+            <div class="viewer">报告预览区 — 此处内嵌 HTML / PDF 在线渲染（<span class="mono">iframe</span> / PDF.js）</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 日志管理 ===== -->
+      <section class="page" id="page-logs">
+        <div class="page-head"><div class="page-title">日志中心</div><div class="page-desc">用户操作、系统运行与测试任务执行日志</div></div>
+        <div class="card">
+          <div class="tabs" id="log-tabs">
+            <button class="tab active" data-tab="user">用户日志</button>
+            <button class="tab" data-tab="system">系统日志</button>
+            <button class="tab" data-tab="test">测试日志</button>
+          </div>
+          <div class="tab-pane active" data-pane="user">
+            <div class="log-line"><span class="log-time">14:32:05</span><span class="log-lvl lvl-info">INFO</span><span class="log-msg">admin 创建了测试任务「支付网关 · 高峰压测」</span></div>
+            <div class="log-line"><span class="log-time">13:58:11</span><span class="log-lvl lvl-info">INFO</span><span class="log-msg">admin 修改了接口「支付回调」的 P95 阈值</span></div>
+            <div class="log-line"><span class="log-time">13:20:44</span><span class="log-lvl lvl-warn">WARN</span><span class="log-msg">admin 删除环境「压测沙箱」被拒绝（存在关联任务）</span></div>
+            <div class="log-line"><span class="log-time">11:02:19</span><span class="log-lvl lvl-info">INFO</span><span class="log-msg">admin 导入报告「订单服务-长稳-20261020.pdf」</span></div>
+          </div>
+          <div class="tab-pane" data-pane="system">
+            <div class="log-line"><span class="log-time">09:00:00</span><span class="log-lvl lvl-info">INFO</span><span class="log-msg">服务启动成功，监听 0.0.0.0:8080，版本 v0.1.0（离线模式）</span></div>
+            <div class="log-line"><span class="log-time">08:59:41</span><span class="log-lvl lvl-info">INFO</span><span class="log-msg">数据库连接池初始化完成（PostgreSQL · 离线）</span></div>
+            <div class="log-line"><span class="log-time">08:59:12</span><span class="log-lvl lvl-debug">DEBUG</span><span class="log-msg">加载 SSL 证书 /etc/ssl/app/server.crt 成功</span></div>
+            <div class="log-line"><span class="log-time">昨日 23:50:00</span><span class="log-lvl lvl-info">INFO</span><span class="log-msg">执行计划性重启，优雅退出完成</span></div>
+          </div>
+          <div class="tab-pane" data-pane="test">
+            <div class="log-line"><span class="log-time">14:32:10</span><span class="log-lvl lvl-info">INFO</span><span class="log-msg">[支付网关·高峰压测] 阶段 2 开始：阶梯加压 0→500 QPS</span></div>
+            <div class="log-line"><span class="log-time">14:32:22</span><span class="log-lvl lvl-warn">WARN</span><span class="log-msg">[支付网关·高峰压测] 接口「支付回调」P95=412ms 超过阈值 300ms</span></div>
+            <div class="log-line"><span class="log-time">14:32:31</span><span class="log-lvl lvl-error">ERROR</span><span class="log-msg">[支付网关·高峰压测] 接口「退款申请」错误率 2.4% 超过阈值 1%</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 系统设置 ===== -->
+      <section class="page" id="page-settings">
+        <div class="page-head"><div class="page-title">系统设置</div><div class="page-desc">管理员、SSL 证书与 SSH/Host 管理</div></div>
+        <div class="card">
+          <div class="tabs" id="set-tabs">
+            <button class="tab active" data-tab="admins">管理员管理</button>
+            <button class="tab" data-tab="certs">证书管理</button>
+            <button class="tab" data-tab="ssh">SSH 与 Host</button>
+          </div>
+          <div class="tab-pane active" data-pane="admins">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)">
+              <div><div class="card-title">管理员</div><div class="cell-sub">用户名、姓名、手机号、邮箱、描述，并通过角色授权</div></div>
+              <button class="btn btn-primary btn-sm" onclick="openAdmin()">+ 新建管理员</button>
+            </div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>账号</th><th>姓名 / 联系方式</th><th>角色</th><th>最近登录</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td><div class="cell-strong">admin</div><div class="cell-sub">内置账号</div></td><td>系统管理员<div class="cell-sub">—</div></td><td><span class="badge badge-info">全部权限</span></td><td class="mono" style="color:var(--muted);font-size:12px">2026-10-26 14:30</td><td><span class="badge badge-success">启用</span></td><td class="ops"><a class="link" onclick="openAdmin('admin',true)">查看</a><a class="link">重置密码</a></td></tr>
+                <tr><td><div class="cell-strong">tester01</div><div class="cell-sub">tester@qianxin-inc.cn</div></td><td>王小明<div class="cell-sub">138****1234</div></td><td><span class="badge badge-neutral">测试操作员</span></td><td class="mono" style="color:var(--muted);font-size:12px">2026-10-25 18:02</td><td><span class="badge badge-success">启用</span></td><td class="ops"><a class="link" onclick="openAdmin('tester01')">编辑</a><a class="link danger">禁用</a></td></tr>
+              </tbody>
+            </table></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+              <div><div class="card-title">角色</div><div class="cell-sub">每个角色是一组权限范围，支持新建、删除、修改</div></div>
+              <button class="btn btn-ghost btn-sm" onclick="openRole()">+ 新建角色</button>
+            </div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>角色名</th><th>权限范围</th><th>描述</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td><span class="badge badge-info">只读观察员</span></td><td><span class="cell-sub">全部子模块只读</span></td><td>仅查看报告与日志</td><td class="ops"><a class="link" onclick="openPerm('只读观察员',false,'role')">编辑权限</a><a class="link danger">删除</a></td></tr>
+                <tr><td><span class="badge badge-neutral">测试操作员</span></td><td><span class="cell-sub">环境/产品/接口/任务/报告可写</span></td><td>日常压测执行</td><td class="ops"><a class="link" onclick="openPerm('测试操作员',false,'role')">编辑权限</a><a class="link danger">删除</a></td></tr>
+              </tbody>
+            </table></div>
+          </div>
+          <div class="tab-pane" data-pane="certs">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)">
+              <div><div class="card-title">SSL 证书</div><div class="cell-sub">导入、删除；内置自签名证书不可删除，可重新初始化</div></div>
+              <button class="btn btn-primary btn-sm" onclick="toast('证书导入（演示）')">+ 导入证书</button>
+            </div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>证书名称</th><th>域名</th><th>有效期至</th><th>来源</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td><div class="cell-strong">self-signed-default.crt</div></td><td class="mono" style="font-size:12px">*.auto-perf.internal</td><td class="mono" style="font-size:12px">2027-10-26</td><td><span class="badge badge-info">内置自签</span></td><td><span class="badge badge-success">有效</span></td><td class="ops"><a class="link">查看</a><a class="link" onclick="toast('重新初始化：仅更新证书有效期时间')">重新初始化</a></td></tr>
+                <tr><td><div class="cell-strong">api-server.crt</div></td><td class="mono" style="font-size:12px">*.auto-perf.internal</td><td class="mono" style="font-size:12px">2027-08-11</td><td><span class="badge badge-neutral">导入</span></td><td><span class="badge badge-success">有效</span></td><td class="ops"><a class="link">查看</a><a class="link danger">删除</a></td></tr>
+                <tr><td><div class="cell-strong">legacy-root.crt</div></td><td class="mono" style="font-size:12px">legacy.internal</td><td class="mono" style="font-size:12px">2026-05-01</td><td><span class="badge badge-neutral">导入</span></td><td><span class="badge badge-danger">已过期</span></td><td class="ops"><a class="link">查看</a><a class="link danger">删除</a></td></tr>
+              </tbody>
+            </table></div>
+          </div>
+          <div class="tab-pane" data-pane="ssh">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)">
+              <div><div class="card-title">SSH 与 Host</div><div class="cell-sub">Host 解析与可信 SSH 配置，支持导入、修改、删除</div></div>
+              <div class="toolbar"><button class="btn btn-ghost btn-sm" onclick="toast('SSH/Host 导入（演示）')">导入</button><button class="btn btn-primary btn-sm" onclick="toast('SSH/Host 添加（演示）')">+ 添加</button></div>
+            </div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Host 别名</th><th>目标</th><th>类型</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td><div class="cell-strong">prod-cluster</div></td><td class="mono" style="font-size:12px">10.20.1.0/24</td><td><span class="badge badge-neutral">Host 解析</span></td><td><span class="badge badge-success">已信任</span></td><td class="ops"><a class="link" onclick="toast('编辑 prod-cluster')">编辑</a><a class="link danger">删除</a></td></tr>
+                <tr><td><div class="cell-strong">sandbox-ssh</div></td><td class="mono" style="font-size:12px">10.40.8.8:22</td><td><span class="badge badge-info">SSH 信任</span></td><td><span class="badge badge-success">已信任</span></td><td class="ops"><a class="link" onclick="toast('编辑 sandbox-ssh')">编辑</a><a class="link danger">删除</a></td></tr>
+              </tbody>
+            </table></div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<script>
+const titles = {
+  '#/overview':'概览',
+  '#/environments/list':'环境管理 / 环境列表',
+  '#/environments/tags':'环境管理 / 标签维护',
+  '#/products/list':'产品管理 / 产品列表',
+  '#/products/interfaces':'产品管理 / 接口管理',
+  '#/testing/tasks':'测试管理 / 测试任务',
+  '#/testing/templates':'测试管理 / 预设模板',
+  '#/reports/list':'报告管理 / 报告列表',
+  '#/logs':'日志管理 / 日志中心',
+  '#/settings':'系统设置'
+};
+const pageMap = {
+  '#/overview':'page-overview',
+  '#/environments/list':'page-env-list',
+  '#/environments/tags':'page-tags',
+  '#/products/list':'page-products',
+  '#/products/interfaces':'page-interfaces',
+  '#/testing/tasks':'page-tasks',
+  '#/testing/templates':'page-templates',
+  '#/reports/list':'page-reports',
+  '#/logs':'page-logs',
+  '#/settings':'page-settings'
+};
+
+function login(){
+  document.getElementById('login').style.display='none';
+  document.getElementById('app').style.display='flex';
+  if(!location.hash) location.hash='#/overview'; else render();
+}
+
+function render(){
+  const h = location.hash || '#/overview';
+  const target = pageMap[h] || 'page-overview';
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(target).classList.add('active');
+  document.querySelectorAll('.nav-item[data-route]').forEach(a=>{
+    a.classList.toggle('active', a.dataset.route===h);
+  });
+  document.getElementById('crumb').textContent = titles[h] || '概览';
+}
+
+function toggleGroup(btn){
+  btn.closest('.nav-group').classList.toggle('collapsed');
+}
+
+document.querySelectorAll('.nav-item[data-route]').forEach(a=>{
+  a.addEventListener('click', e=>{ e.preventDefault(); location.hash=a.dataset.route; });
+});
+window.addEventListener('hashchange', render);
+
+// tabs
+function bindTabs(containerId){
+  const c = document.getElementById(containerId);
+  c.querySelectorAll('.tab').forEach(t=>{
+    t.addEventListener('click', ()=>{
+      c.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+      document.querySelectorAll('[data-pane]').forEach(p=>p.classList.remove('active'));
+      const pane = document.querySelector('[data-pane="'+t.dataset.tab+'"]');
+      if(pane) pane.classList.add('active');
+    });
+  });
+}
+bindTabs('log-tabs');
+bindTabs('set-tabs');
+
+// 从登录态恢复（便于刷新）
+if(location.hash && location.hash.startsWith('#/') && document.getElementById('app').style.display==='none'){
+  login();
+}
+const PERMS=[
+  ['环境管理 · 环境列表',0],['环境管理 · 标签维护',0],['产品管理 · 产品列表',0],['产品管理 · 接口管理',0],
+  ['测试管理 · 测试任务',0],['测试管理 · 预设模板',0],['报告管理 · 报告列表',0],['日志管理 · 日志中心',0],
+  ['系统设置 · 管理员管理',1],['系统设置 · 证书管理',1],['系统设置 · SSH 与 Host',1]
+];
+function renderPerms(locked){
+  document.getElementById('permList').innerHTML=PERMS.map((p,i)=>{
+    const sensitive=p[1]===1;
+    const sub=sensitive?'<span class="sub">敏感模块</span>':'';
+    const v=locked?'write':(sensitive?'none':'write');
+    const k=x=>'on-'+x;
+    return `<div class="perm-row"><div class="perm-name">${p[0]}${sub}</div><div class="seg">
+      <button class="${v==='none'?k('none'):''}" ${locked?'disabled':''} onclick="setPerm(${i},'none',this)">无</button>
+      <button class="${v==='read'?k('read'):''}" ${locked?'disabled':''} onclick="setPerm(${i},'read',this)">只读</button>
+      <button class="${v==='write'?k('write'):''}" ${locked?'disabled':''} onclick="setPerm(${i},'write',this)">可写</button>
+    </div></div>`;
+  }).join('');
+}
+function setPerm(i,v,btn){
+  btn.parentElement.querySelectorAll('button').forEach(b=>b.className='');
+  btn.className='on-'+v;
+}
+function openPerm(user,locked,kind){
+  kind=kind||'admin';
+  document.getElementById('permTitle').textContent=locked?'查看权限（内置账号）':(kind==='role'?'编辑角色权限':'编辑权限');
+  document.getElementById('permSub').textContent=locked?user+' · 内置 admin 默认全权限，不可修改':user;
+  renderPerms(!!locked);
+  document.getElementById('permMask').classList.add('show');
+  document.getElementById('permDrawer').classList.add('show');
+}
+function openAdmin(name,locked){
+  document.getElementById('adminTitle').textContent=locked?'查看管理员':'新建管理员';
+  document.getElementById('adminSub').textContent=locked?(name||'')+' · 内置账号不可修改':'填写基本信息并分配角色';
+  document.getElementById('adminMask').classList.add('show');
+  document.getElementById('adminDrawer').classList.add('show');
+}
+function closeAdmin(){
+  document.getElementById('adminMask').classList.remove('show');
+  document.getElementById('adminDrawer').classList.remove('show');
+}
+function openRole(){
+  openPerm('新角色',false,'role');
+}
+function toast(msg){
+  let t=document.getElementById('toast');
+  if(!t){t=document.createElement('div');t.id='toast';document.body.appendChild(t);}
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(t._tm);t._tm=setTimeout(()=>t.classList.remove('show'),2200);
+}
+function closePerm(){
+  document.getElementById('permMask').classList.remove('show');
+  document.getElementById('permDrawer').classList.remove('show');
+}
+</script>
+
+<div class="drawer-mask" id="permMask" onclick="closePerm()"></div>
+<div class="drawer" id="permDrawer">
+  <div class="drawer-head">
+    <div><div class="drawer-title" id="permTitle">编辑权限</div><div class="cell-sub" id="permSub" style="margin-top:3px">tester01</div></div>
+    <button class="icon-btn" onclick="closePerm()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="perm-hint">逐子模块授予「无 / 只读 / 可写」权限，管理员最终权限 = 所授分权模块并集。</div>
+    <div class="perm-list" id="permList"></div>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn btn-ghost" onclick="closePerm()">取消</button>
+    <button class="btn btn-primary" onclick="closePerm()">保存</button>
+  </div>
+</div>
+
+<div class="drawer-mask" id="adminMask" onclick="closeAdmin()"></div>
+<div class="drawer" id="adminDrawer">
+  <div class="drawer-head">
+    <div><div class="drawer-title" id="adminTitle">新建管理员</div><div class="cell-sub" id="adminSub" style="margin-top:3px">填写基本信息并分配角色</div></div>
+    <button class="icon-btn" onclick="closeAdmin()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="field"><label>用户名（管理员名）*</label><input class="input" placeholder="登录名，唯一" /></div>
+    <div class="field"><label>姓名 *</label><input class="input" placeholder="真实姓名" /></div>
+    <div class="field"><label>手机号</label><input class="input" placeholder="138****1234" /></div>
+    <div class="field"><label>邮箱</label><input class="input" placeholder="user@example.com" /></div>
+    <div class="field"><label>描述</label><textarea class="input" style="height:64px;padding:9px 13px;resize:vertical" placeholder="备注说明"></textarea></div>
+    <div class="field"><label>角色授权</label>
+      <div class="role-checks">
+        <label class="check"><input type="checkbox" checked /> 只读观察员</label>
+        <label class="check"><input type="checkbox" checked /> 测试操作员</label>
+        <label class="check"><input type="checkbox" /> 压测管理员</label>
+      </div>
+    </div>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn btn-ghost" onclick="closeAdmin()">取消</button>
+    <button class="btn btn-primary" onclick="closeAdmin()">保存</button>
+  </div>
+</div>
+
+</body>
+</html>

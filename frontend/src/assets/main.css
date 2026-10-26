@@ -1,0 +1,25 @@
+:root {
+  --ap-sidebar-bg: #1f2937;
+  --ap-sidebar-text: #d1d5db;
+  --ap-primary: #2563eb;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'PingFang SC', 'Microsoft YaHei', sans-serif;
+  color: #1f2933;
+  background-color: #f5f6f8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}

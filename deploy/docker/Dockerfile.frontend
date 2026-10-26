@@ -1,0 +1,9 @@
+# 前端构建（骨架占位；正式通过 nginx 服务或内嵌进后端）
+FROM node:24-alpine AS build
+WORKDIR /src
+COPY frontend/ ./
+RUN npm ci && npm run build
+
+FROM nginx:alpine
+COPY --from=build /src/dist /usr/share/nginx/html
+EXPOSE 80

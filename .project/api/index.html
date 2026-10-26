@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>auto_performance · API 可视化</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --ink:#0c1311; --ink-2:#121b18; --bg:#f3f5f4; --surface:#fff; --border:#e5e9e7; --border-2:#d5dbd8;
+  --text:#1a201d; --muted:#66716c; --faint:#9aa39f;
+  --accent:#059669; --accent-soft:#ecfdf5; --accent-border:#a7f3d0;
+  --get:#2563eb; --post:#059669; --put:#d97706; --delete:#e11d48; --patch:#7c3aed;
+  --mono:'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  --sans:'IBM Plex Sans', system-ui, -apple-system, "Segoe UI", sans-serif;
+  --radius:12px; --shadow:0 1px 3px rgba(16,24,20,.06),0 8px 24px -12px rgba(16,24,20,.12);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.mono{font-family:var(--mono)}
+header{position:sticky;top:0;z-index:10;background:var(--ink);color:#e6ebe9;padding:16px 28px;display:flex;align-items:center;gap:18px;box-shadow:0 4px 20px -8px rgba(0,0,0,.4)}
+.brand{display:flex;align-items:center;gap:11px;flex:none}
+.brand-mark{width:30px;height:30px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#fff;box-shadow:0 3px 10px -3px rgba(5,150,105,.7)}
+.brand-name{font-weight:700;font-size:15px;letter-spacing:-.01em;color:#fff}
+.brand-sub{font-size:11.5px;color:#7b8781}
+.search{flex:1;max-width:520px;display:flex;align-items:center;gap:8px;height:38px;padding:0 13px;background:#1a2621;border:1px solid #2a3832;border-radius:9px;color:var(--muted)}
+.search input{flex:1;background:none;border:none;outline:none;color:#e6ebe9;font-size:13.5px;font-family:inherit}
+.search input::placeholder{color:#6f7b75}
+.stat{margin-left:auto;display:flex;gap:18px;align-items:center;flex:none}
+.stat-item{text-align:right}
+.stat-num{font-family:var(--mono);font-weight:600;font-size:16px;color:#fff}
+.stat-label{font-size:10.5px;color:#7b8781;letter-spacing:.04em}
+.btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid #2a3832;background:#1a2621;color:#cdd6d1;transition:.14s}
+.btn:hover{border-color:var(--accent);color:#fff}
+main{max-width:1100px;margin:0 auto;padding:26px 28px 60px}
+.notice{display:none;background:var(--accent-soft);border:1px solid var(--accent-border);color:#065f46;border-radius:10px;padding:14px 16px;margin-bottom:18px;font-size:13.5px}
+.notice code{font-family:var(--mono);background:rgba(5,150,105,.12);padding:2px 6px;border-radius:5px}
+.module{margin-top:26px}
+.module:first-of-type{margin-top:0}
+.module-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.module-title{font-size:16px;font-weight:700;letter-spacing:-.01em}
+.module-count{font-family:var(--mono);font-size:11.5px;color:var(--muted);background:var(--surface);border:1px solid var(--border);padding:2px 9px;border-radius:99px}
+.op{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm,0 1px 2px rgba(16,24,20,.05));margin-bottom:10px;overflow:hidden}
+.op-head{display:flex;align-items:center;gap:14px;padding:13px 18px;cursor:pointer;transition:.12s}
+.op-head:hover{background:#fafbfb}
+.method{flex:none;min-width:64px;text-align:center;font-family:var(--mono);font-weight:700;font-size:11.5px;padding:5px 10px;border-radius:7px;color:#fff;letter-spacing:.02em}
+.method.get{background:var(--get)} .method.post{background:var(--post)} .method.put{background:var(--put)} .method.delete{background:var(--delete)} .method.patch{background:var(--patch)}
+.op-path{font-family:var(--mono);font-size:13.5px;font-weight:500;word-break:break-all}
+.op-summary{color:var(--muted);font-size:13px;margin-left:auto;text-align:right;flex:none;max-width:320px}
+.op-tags{display:flex;gap:6px;flex:none;margin-left:6px}
+.pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.pill.perm{background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent-border)}
+.pill.pub{background:var(--neutral-soft,#f1f5f9);color:var(--muted);border:1px solid var(--border-2)}
+.caret{margin-left:6px;color:var(--faint);transition:transform .2s;flex:none}
+.op.open .caret{transform:rotate(90deg)}
+.op-body{display:none;border-top:1px solid var(--border);padding:16px 18px;background:#fbfcfc}
+.op.open .op-body{display:block}
+.sec-title{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--muted);text-transform:uppercase;margin:14px 0 8px}
+.sec-title:first-child{margin-top:0}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.03em;text-transform:uppercase;padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+tr:last-child td{border-bottom:none}
+.req{font-family:var(--mono);color:var(--danger);font-weight:600;font-size:11px}
+.type{font-family:var(--mono);font-size:11.5px;color:var(--get)}
+pre{background:#0d1412;color:#d7e2dd;border-radius:10px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.6}
+pre .k{color:#7ee2b8} pre .s{color:#f4c98b} pre .n{color:#8ab4f8} pre .b{color:#f4a7b9}
+.empty{text-align:center;color:var(--muted);padding:60px 0}
+.err-chips{display:flex;flex-wrap:wrap;gap:6px}
+.err-chip{font-family:var(--mono);font-size:11px;background:var(--surface);border:1px solid var(--border-2);color:var(--muted);padding:3px 8px;border-radius:6px}
+.hint{color:var(--faint);font-size:12px;margin-top:6px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="brand-mark"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg></div>
+    <div><div class="brand-name">auto_performance API</div><div class="brand-sub">OpenAPI 可视化 · 单一数据源自动渲染</div></div>
+  </div>
+  <div class="search">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+    <input id="q" placeholder="搜索接口路径 / 摘要 / 模块…" oninput="onSearch(this.value)" />
+  </div>
+  <div class="stat">
+    <div class="stat-item"><div class="stat-num" id="total">0</div><div class="stat-label">接口总数</div></div>
+    <button class="btn" onclick="toggleAll(true)">全部展开</button>
+    <button class="btn" onclick="toggleAll(false)">全部收起</button>
+  </div>
+</header>
+
+<main>
+  <div class="notice" id="notice">
+    当前通过 <code>file://</code> 打开无法读取 <code>openapi.json</code>。请在 <code>.project/api</code> 目录执行
+    <code>python -m http.server 8000</code>，再访问 <code>http://localhost:8000/index.html</code>。
+  </div>
+  <div id="app"><div class="empty">加载中…</div></div>
+</main>
+
+<script>
+let DATA = null;
+const TAG_CN = {auth:'认证', environment:'环境管理', product:'产品管理', testing:'测试管理', report:'报告管理', log:'日志管理', system:'系统设置'};
+
+async function load(){
+  try{
+    const res = await fetch('openapi.json');
+    if(!res.ok) throw new Error(res.status);
+    DATA = await res.json();
+    document.getElementById('notice').style.display='none';
+    render(DATA);
+  }catch(e){
+    document.getElementById('notice').style.display='block';
+    document.getElementById('app').innerHTML = '<div class="empty">无法加载 openapi.json（需本地 HTTP 服务）</div>';
+  }
+}
+
+function resolveRef(ref){
+  // "#/components/schemas/X" -> data.components.schemas.X
+  if(!ref) return null;
+  let cur = DATA;
+  for(const p of ref.replace(/^#\//,'').split('/')){ cur = cur && cur[p]; }
+  return cur;
+}
+
+function mergeAllOf(schema, depth){
+  depth = depth || 0;
+  if(!schema) return {};
+  if(depth > 6) return schema;
+  if(schema.allOf){
+    let props = {};
+    let merged = Object.assign({}, schema);
+    for(const s of schema.allOf){
+      const r = s.$ref ? resolveRef(s.$ref) : s;
+      const m = mergeAllOf(r, depth+1);
+      if(m.properties) Object.assign(props, m.properties);
+    }
+    merged.properties = props;
+    return merged;
+  }
+  return schema;
+}
+
+function propType(prop){
+  if(!prop) return '-';
+  if(prop.$ref){ const r = resolveRef(prop.$ref); if(r) return r.type || 'object'; }
+  if(prop.type === 'array'){ const it = prop.items && (prop.items.$ref ? resolveRef(prop.items.$ref) : prop.items); return 'array<'+((it && it.type)||'object')+'>'; }
+  return prop.type || 'object';
+}
+
+function typeExample(t){
+  switch(t){
+    case 'string': return 'string';
+    case 'integer': case 'number': return 0;
+    case 'boolean': return true;
+    case 'array': return [];
+    case 'object': return {};
+    default: return null;
+  }
+}
+
+function genExample(schema, depth){
+  depth = depth || 0;
+  if(depth > 4) return null;
+  const s = mergeAllOf(schema);
+  if(s.type === 'object' && s.properties){
+    const o = {};
+    for(const [k,v] of Object.entries(s.properties)){
+      o[k] = genProp(v, depth+1);
+    }
+    return o;
+  }
+  return typeExample(s.type || 'object');
+}
+
+function genProp(prop, depth){
+  if(prop.$ref){
+    const r = resolveRef(prop.$ref);
+    if(!r) return null;
+    if(r.enum) return r.enum[0];
+    if(r.type === 'object') return genExample(r, depth+1);
+    if(r.type === 'array') return [];
+    return typeExample(r.type);
+  }
+  if(prop.enum) return prop.enum[0];
+  if(prop.type === 'array') return [];
+  return typeExample(prop.type);
+}
+
+function schemaToExample(schema){
+  try{ return JSON.stringify(genExample(schema), null, 2); }catch(e){ return '{}'; }
+}
+
+function paramName(p){
+  if(p.$ref){ const r = resolveRef(p.$ref); return r ? r.name : '?'; }
+  return p.name || '?';
+}
+function paramMeta(p){
+  if(p.$ref){ const r = resolveRef(p.$ref); return r || {}; }
+  return p;
+}
+
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function highlight(json){
+  // 极简 JSON 着色
+  const s = esc(json);
+  return s
+    .replace(/(&quot;.*?&quot;)(\s*:)?/g, (m, k, colon) => colon ? '<span class="k">'+k+'</span>:' : '<span class="s">'+k+'</span>')
+    .replace(/\b(true|false|null)\b/g, '<span class="b">$1</span>')
+    .replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="n">$1</span>');
+}
+
+function renderParamTable(params){
+  if(!params || !params.length) return '<div class="hint">无参数</div>';
+  let rows = params.map(p => {
+    const m = paramMeta(p);
+    const req = m.required ? '<span class="req">必填</span>' : '';
+    const schema = m.schema || m;
+    const type = propType(schema);
+    const desc = esc(m.description || '');
+    return `<tr><td class="mono">${esc(m.name)}</td><td>${m.in}</td><td><span class="type">${type}</span></td><td>${req}</td><td>${desc}</td></tr>`;
+  }).join('');
+  return `<table><thead><tr><th>参数</th><th>位置</th><th>类型</th><th></th><th>说明</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderBody(body){
+  if(!body) return '';
+  const c = body.content && (body.content['application/json'] || body.content['multipart/form-data'] || body.content['application/octet-stream']);
+  if(!c) return '';
+  const schema = c.schema && c.schema.$ref ? resolveRef(c.schema.$ref) : (c.schema || {});
+  const merged = mergeAllOf(schema);
+  let propsRows = '';
+  if(merged.properties){
+    propsRows = Object.entries(merged.properties).map(([k,v])=>{
+      const req = (merged.required && merged.required.includes(k)) ? '<span class="req">必填</span>' : '';
+      return `<tr><td class="mono">${esc(k)}</td><td><span class="type">${propType(v)}</span></td><td>${req}</td><td>${esc(v.description||'')}</td></tr>`;
+    }).join('');
+  }
+  const example = schemaToExample(schema);
+  let html = '';
+  if(propsRows){
+    html += `<div class="sec-title">请求体字段</div><table><thead><tr><th>字段</th><th>类型</th><th></th><th>说明</th></tr></thead><tbody>${propsRows}</tbody></table>`;
+  }
+  html += `<div class="sec-title">请求示例</div><pre>${highlight(example)}</pre>`;
+  return html;
+}
+
+function renderResponses(responses){
+  if(!responses) return '';
+  let html = '';
+  for(const [code, resp] of Object.entries(responses)){
+    const r = resp && resp.$ref ? resolveRef(resp.$ref) : resp;
+    if(!r) continue;
+    const c = r.content && r.content['application/json'];
+    if(c && c.schema){
+      const schema = c.schema.$ref ? resolveRef(c.schema.$ref) : c.schema;
+      const example = schemaToExample(schema);
+      html += `<div class="sec-title">响应 ${esc(code)} · ${esc(r.description||'')}</div><pre>${highlight(example)}</pre>`;
+    } else if(r.description){
+      html += `<div class="sec-title">响应 ${esc(code)}</div><div class="hint">${esc(r.description)}</div>`;
+    }
+  }
+  return html;
+}
+
+function opCard(op){
+  const method = op.method.toUpperCase();
+  const perm = op.x_permission || op['x-permission'] || 'public';
+  const permPill = perm === 'public' ? '<span class="pill pub">公开</span>' : `<span class="pill perm">${esc(perm)}</span>`;
+  const errs = op.x_err_codes || op['x-err-codes'] || [];
+  const errChips = errs.length ? `<div class="err-chips">${errs.map(e=>`<span class="err-chip">${e}</span>`).join('')}</div>` : '';
+  return `<div class="op" data-path="${esc(op.path)}" data-summary="${esc(op.summary||'')}">
+    <div class="op-head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="method ${method.toLowerCase()}">${method}</span>
+      <span class="op-path">${esc(op.path)}</span>
+      <span class="op-summary">${esc(op.summary||'')}</span>
+      <span class="op-tags">${permPill}</span>
+      <span class="caret">▶</span>
+    </div>
+    <div class="op-body">
+      ${op.parameters ? `<div class="sec-title">参数</div>`+renderParamTable(op.parameters) : ''}
+      ${op.requestBody ? renderBody(op.requestBody) : ''}
+      ${renderResponses(op.responses)}
+      ${errChips ? `<div class="sec-title">相关错误码</div>`+errChips : ''}
+    </div>
+  </div>`;
+}
+
+function render(data){
+  // 收集所有 operation
+  const ops = [];
+  for(const [path, methods] of Object.entries(data.paths)){
+    for(const [method, op] of Object.entries(methods)){
+      if(['get','post','put','delete','patch'].includes(method)){
+        ops.push({ method, path, summary: op.summary, tags: op.tags||[], op, x_permission: op['x-permission'], x_err_codes: op['x-err-codes'], parameters: op.parameters, requestBody: op.requestBody, responses: op.responses });
+      }
+    }
+  }
+  document.getElementById('total').textContent = ops.length;
+
+  // 按 tag 分组
+  const groups = {};
+  const order = ['auth','environment','product','testing','report','log','system'];
+  for(const o of ops){
+    const t = (o.tags[0] || 'other');
+    (groups[t] = groups[t] || []).push(o);
+  }
+  const sorted = Object.keys(groups).sort((a,b)=>order.indexOf(a)-order.indexOf(b));
+
+  const html = sorted.map(tag => {
+    const list = groups[tag].map(opCard).join('');
+    return `<div class="module" data-tag="${esc(TAG_CN[tag]||tag)}"><div class="module-head"><div class="module-title">${esc(TAG_CN[tag]||tag)}</div><span class="module-count">${groups[tag].length} 个接口</span></div>${list}</div>`;
+  }).join('');
+
+  document.getElementById('app').innerHTML = html || '<div class="empty">无匹配接口</div>';
+}
+
+function onSearch(q){
+  if(!DATA) return;
+  q = q.trim().toLowerCase();
+  document.querySelectorAll('.op').forEach(op => {
+    const path = (op.dataset.path||'').toLowerCase();
+    const summary = (op.dataset.summary||'').toLowerCase();
+    const tag = (op.closest('.module').dataset.tag||'').toLowerCase();
+    const hit = !q || path.includes(q) || summary.includes(q) || tag.includes(q);
+    op.style.display = hit ? '' : 'none';
+    op.closest('.module').style.display = hit ? '' : 'none';
+  });
+  // 隐藏空模块
+  document.querySelectorAll('.module').forEach(m => {
+    const any = [...m.querySelectorAll('.op')].some(o => o.style.display !== 'none');
+    m.style.display = any ? '' : 'none';
+  });
+}
+
+function toggleAll(open){
+  document.querySelectorAll('.op').forEach(op => op.classList.toggle('open', open));
+}
+
+load();
+</script>
+</body>
+</html>

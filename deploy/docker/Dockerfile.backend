@@ -1,0 +1,13 @@
+# 多阶段构建后端单二进制（骨架占位）
+FROM golang:1.26 AS build
+WORKDIR /src
+COPY backend/ ./backend/
+WORKDIR /src/backend
+# 静态编译，内嵌前端 + 模板
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o /out/auto_performance ./cmd/server
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates tzdata
+COPY --from=build /out/auto_performance /usr/local/bin/auto_performance
+EXPOSE 8080
+ENTRYPOINT ["auto_performance"]

@@ -1,0 +1,27 @@
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.backend
+    ports:
+      - "8080:8080"
+    environment:
+      AUTO_PERF_DATABASE_HOST: postgres
+      AUTO_PERF_DATABASE_USER: postgres
+      AUTO_PERF_DATABASE_PASSWORD: postgres
+      AUTO_PERF_DATABASE_NAME: auto_performance
+      AUTO_PERF_DATABASE_SSLMODE: disable
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: auto_performance
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

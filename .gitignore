@@ -1,0 +1,20 @@
+# Go
+backend/bin/
+
+# Node / 前端
+frontend/node_modules/
+frontend/dist/
+
+# 离线打包产物
+dist/
+
+# 前端内嵌产物（保留占位 index.html，忽略构建生成的静态资源）
+backend/web/dist/*
+!backend/web/dist/index.html
+
+# 编辑器 / 系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log

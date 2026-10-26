@@ -1,0 +1,2673 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "auto_performance REST API",
+    "description": "性能测试平台后端接口单一数据源（机器化 OpenAPI 3.0 契约）。由 specs/api-contract.md 提炼，78 个接口全覆盖；新增接口仅需修改本文件，可视化接口列表自动更新。统一响应 {code,message,data}，JWT Bearer 鉴权，分页参数复用 components.parameters。",
+    "version": "1.0.0",
+    "x-doc-source": "specs/api-contract.md",
+    "x-generated-date": "2026-10-26",
+    "x-interface-count": 78
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "基础路径；完整接口路径以 /api/v1 为前缀，示例 /api/v1/environments"
+    }
+  ],
+  "tags": [
+    { "name": "auth", "description": "认证（登录/登出/改密/当前用户）" },
+    { "name": "environment", "description": "环境管理（分类/标签/环境）" },
+    { "name": "product", "description": "产品管理（产品/接口/阈值）" },
+    { "name": "testing", "description": "测试管理（模板/任务）" },
+    { "name": "report", "description": "报告管理（生成/导入/导出/产物）" },
+    { "name": "log", "description": "日志管理（用户/系统/测试日志，只读）" },
+    { "name": "system", "description": "系统设置（管理员/角色/权限/证书/SSH）" }
+  ],
+  "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "登录",
+        "operationId": "authLogin",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "登录成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [],
+        "x-permission": "public",
+        "x-err-codes": [20001, 20002, 10502, 10103]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "登出",
+        "operationId": "authLogout",
+        "responses": {
+          "200": {
+            "description": "登出成功，当前 token 失效",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmptyResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "authenticated",
+        "x-err-codes": [10101]
+      }
+    },
+    "/api/v1/auth/change-password": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "修改密码（含首登强制改密）",
+        "operationId": "authChangePassword",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChangePasswordRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "改密成功，清除 must_change_password，旧 token 失效",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmptyResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "authenticated",
+        "x-err-codes": [20003, 20004, 20005]
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": ["auth"],
+        "summary": "查询当前用户信息与权限集合",
+        "operationId": "authMe",
+        "responses": {
+          "200": {
+            "description": "当前管理员信息与权限点并集",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MeResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "authenticated",
+        "x-err-codes": [10101]
+      }
+    },
+    "/api/v1/environment-categories": {
+      "get": {
+        "tags": ["environment"],
+        "summary": "环境分类列表",
+        "operationId": "listEnvironmentCategories",
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/PageSizeParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "分类列表",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EnvironmentCategoryListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "env.list:read",
+        "x-err-codes": []
+      },
+      "post": {
+        "tags": ["environment"],
+        "summary": "新建环境分类",
+        "operationId": "createEnvironmentCategory",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EnvironmentCategoryRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "新建的分类",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EnvironmentCategoryDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "env.list:write",
+        "x-err-codes": [10302]
+      }
+    },
+    "/api/v1/environment-categories/{id}": {
+      "put": {
+        "tags": ["environment"],
+        "summary": "修改环境分类",
+        "operationId": "updateEnvironmentCategory",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EnvironmentCategoryRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的分类",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EnvironmentCategoryDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "env.list:write",
+        "x-err-codes": [10301, 10302]
+      },
+      "delete": {
+        "tags": ["environment"],
+        "summary": "删除环境分类",
+        "operationId": "deleteEnvironmentCategory",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmptyResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "env.list:write",
+        "x-err-codes": [21002]
+      }
+    },
+    "/api/v1/tags": {
+      "get": {
+        "tags": ["environment"],
+        "summary": "标签列表（含关联环境数）",
+        "operationId": "listTags",
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/PageSizeParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "标签列表",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TagListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "env.tag:read",
+        "x-err-codes": []
+      },
+      "post": {
+        "tags": ["environment"],
+        "summary": "新建标签",
+        "operationId": "createTag",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TagRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "新建的标签",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TagDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "env.tag:write",
+        "x-err-codes": [10302]
+      }
+    },
+    "/api/v1/tags/{id}": {
+      "put": {
+        "tags": ["environment"],
+        "summary": "修改标签",
+        "operationId": "updateTag",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TagRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的标签",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TagDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "env.tag:write",
+        "x-err-codes": [10301]
+      },
+      "delete": {
+        "tags": ["environment"],
+        "summary": "删除标签",
+        "operationId": "deleteTag",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmptyResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "env.tag:write",
+        "x-err-codes": [21003]
+      }
+    },
+    "/api/v1/tags/{id}/environments": {
+      "get": {
+        "tags": ["environment"],
+        "summary": "标签关联环境列表（反查）",
+        "operationId": "listTagEnvironments",
+        "parameters": [
+          { "$ref": "#/components/parameters/IdParam" },
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/PageSizeParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "该标签关联的环境列表",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EnvironmentListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "env.tag:read",
+        "x-err-codes": [10301]
+      }
+    },
+    "/api/v1/environments": {
+      "get": {
+        "tags": ["environment"],
+        "summary": "环境列表（筛选/分页）",
+        "operationId": "listEnvironments",
+        "parameters": [
+          { "$ref": "#/components/parameters/KeywordParam" },
+          { "name": "category_id", "in": "query", "schema": { "type": "string" }, "description": "分类 ID" },
+          { "name": "tag_ids", "in": "query", "schema": { "type": "string" }, "description": "标签 ID 列表（逗号分隔，取交集）" },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["pending", "testing", "disabled"] }, "description": "状态：pending 待测试 / testing 测试中 / disabled 已下线" },
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/PageSizeParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "环境列表（hosts 按权限裁剪脱敏）",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EnvironmentListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "env.list:read",
+        "x-err-codes": []
+      },
+      "post": {
+        "tags": ["environment"],
+        "summary": "新建环境",
+        "operationId": "createEnvironment",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EnvironmentRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "新建的环境（status=pending）",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EnvironmentDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "env.list:write",
+        "x-err-codes": [21001, 10301]
+      }
+    },
+    "/api/v1/environments/{id}": {
+      "get": {
+        "tags": ["environment"],
+        "summary": "环境详情",
+        "operationId": "getEnvironment",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "环境详情",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EnvironmentDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "env.list:read",
+        "x-err-codes": [10301]
+      },
+      "put": {
+        "tags": ["environment"],
+        "summary": "修改环境",
+        "operationId": "updateEnvironment",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EnvironmentRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的环境实体",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EnvironmentDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "env.list:write",
+        "x-err-codes": [10301, 10402]
+      },
+      "delete": {
+        "tags": ["environment"],
+        "summary": "删除环境（逻辑删除）",
+        "operationId": "deleteEnvironment",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmptyResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "env.list:write",
+        "x-err-codes": [21004]
+      }
+    },
+    "/api/v1/environments/{id}/tags": {
+      "put": {
+        "tags": ["environment"],
+        "summary": "绑定标签（打标签）",
+        "operationId": "bindEnvironmentTags",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tag_ids": { "type": "array", "items": { "type": "string" }, "description": "标签 ID 列表（全量替换绑定）" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "绑定成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EnvironmentDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "env.list:write",
+        "x-err-codes": [10301]
+      }
+    },
+    "/api/v1/environments/{id}/status": {
+      "patch": {
+        "tags": ["environment"],
+        "summary": "停用/启用环境",
+        "operationId": "updateEnvironmentStatus",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EnvironmentStatusRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "状态更新成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EnvironmentDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "env.list:write",
+        "x-err-codes": [21004, 10401]
+      }
+    },
+    "/api/v1/products": {
+      "get": {
+        "tags": ["product"],
+        "summary": "产品列表（筛选/分页）",
+        "operationId": "listProducts",
+        "parameters": [
+          { "$ref": "#/components/parameters/KeywordParam" },
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/PageSizeParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "产品列表",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "product.list:read",
+        "x-err-codes": []
+      },
+      "post": {
+        "tags": ["product"],
+        "summary": "创建产品",
+        "operationId": "createProduct",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ProductRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "创建的产品（status=enabled）",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "product.list:write",
+        "x-err-codes": [22001]
+      }
+    },
+    "/api/v1/products/{id}": {
+      "get": {
+        "tags": ["product"],
+        "summary": "产品详情",
+        "operationId": "getProduct",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "产品详情",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "product.list:read",
+        "x-err-codes": [10301]
+      },
+      "put": {
+        "tags": ["product"],
+        "summary": "修改产品",
+        "operationId": "updateProduct",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ProductRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的产品",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "product.list:write",
+        "x-err-codes": [10301, 10402]
+      },
+      "delete": {
+        "tags": ["product"],
+        "summary": "删除产品（逻辑删除）",
+        "operationId": "deleteProduct",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmptyResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "product.list:write",
+        "x-err-codes": [22002]
+      }
+    },
+    "/api/v1/products/{id}/status": {
+      "patch": {
+        "tags": ["product"],
+        "summary": "停用/启用产品",
+        "operationId": "updateProductStatus",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/StatusRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "状态更新成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "product.list:write",
+        "x-err-codes": [10401]
+      }
+    },
+    "/api/v1/products/{id}/interfaces": {
+      "get": {
+        "tags": ["product"],
+        "summary": "产品下接口列表",
+        "operationId": "listProductInterfaces",
+        "parameters": [
+          { "$ref": "#/components/parameters/IdParam" },
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/PageSizeParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "产品下接口列表",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InterfaceListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "product.interface:read",
+        "x-err-codes": []
+      },
+      "post": {
+        "tags": ["product"],
+        "summary": "新建接口",
+        "operationId": "createProductInterface",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/InterfaceRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "新建的接口（认证头加密存储，响应脱敏）",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InterfaceDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "product.interface:write",
+        "x-err-codes": [10301]
+      }
+    },
+    "/api/v1/interfaces/{id}": {
+      "put": {
+        "tags": ["product"],
+        "summary": "修改接口",
+        "operationId": "updateInterface",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/InterfaceRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的接口",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InterfaceDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "product.interface:write",
+        "x-err-codes": [10301, 10402]
+      },
+      "delete": {
+        "tags": ["product"],
+        "summary": "删除接口",
+        "operationId": "deleteInterface",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmptyResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "product.interface:write",
+        "x-err-codes": [10301]
+      }
+    },
+    "/api/v1/interfaces/{id}/status": {
+      "patch": {
+        "tags": ["product"],
+        "summary": "停用/启用接口",
+        "operationId": "updateInterfaceStatus",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/StatusRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "状态更新成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InterfaceDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "product.interface:write",
+        "x-err-codes": [10401]
+      }
+    },
+    "/api/v1/interfaces/{id}/thresholds": {
+      "get": {
+        "tags": ["product"],
+        "summary": "接口阈值列表",
+        "operationId": "listInterfaceThresholds",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "接口阈值列表",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ThresholdListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "product.interface:read",
+        "x-err-codes": [10301]
+      },
+      "put": {
+        "tags": ["product"],
+        "summary": "批量设置接口阈值（全量替换）",
+        "operationId": "updateInterfaceThresholds",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ThresholdsRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "阈值设置成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ThresholdListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "product.interface:write",
+        "x-err-codes": [22003]
+      }
+    },
+    "/api/v1/templates": {
+      "get": {
+        "tags": ["testing"],
+        "summary": "模板列表（分页）",
+        "operationId": "listTemplates",
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/PageSizeParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "模板列表",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TemplateListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "testing.template:read",
+        "x-err-codes": []
+      },
+      "post": {
+        "tags": ["testing"],
+        "summary": "保存模板",
+        "operationId": "createTemplate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TemplateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "新建的模板",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TemplateDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "testing.template:write",
+        "x-err-codes": [10302]
+      }
+    },
+    "/api/v1/templates/{id}": {
+      "get": {
+        "tags": ["testing"],
+        "summary": "模板详情",
+        "operationId": "getTemplate",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "模板详情",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TemplateDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "testing.template:read",
+        "x-err-codes": [10301]
+      },
+      "put": {
+        "tags": ["testing"],
+        "summary": "修改模板",
+        "operationId": "updateTemplate",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TemplateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的模板",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TemplateDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "testing.template:write",
+        "x-err-codes": [10301, 10402]
+      },
+      "delete": {
+        "tags": ["testing"],
+        "summary": "删除模板",
+        "operationId": "deleteTemplate",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmptyResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "testing.template:write",
+        "x-err-codes": [10301]
+      }
+    },
+    "/api/v1/tasks": {
+      "post": {
+        "tags": ["testing"],
+        "summary": "创建任务（五要素组装，含快照）",
+        "operationId": "createTask",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TaskCreateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "创建的任务（status=pending，含接口范围+阈值快照）",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "testing.task:write",
+        "x-err-codes": [23002, 23003, 23004]
+      },
+      "get": {
+        "tags": ["testing"],
+        "summary": "任务列表（筛选/分页）",
+        "operationId": "listTasks",
+        "parameters": [
+          { "$ref": "#/components/parameters/KeywordParam" },
+          { "name": "status", "in": "query", "schema": { "type": "string" }, "description": "任务状态筛选" },
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/PageSizeParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "任务列表",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "testing.task:read",
+        "x-err-codes": []
+      }
+    },
+    "/api/v1/tasks/{id}": {
+      "get": {
+        "tags": ["testing"],
+        "summary": "任务详情",
+        "operationId": "getTask",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "任务详情",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "testing.task:read",
+        "x-err-codes": [10301]
+      }
+    },
+    "/api/v1/tasks/{id}/start": {
+      "post": {
+        "tags": ["testing"],
+        "summary": "执行任务",
+        "operationId": "startTask",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "执行触发成功（pending→running）",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "testing.task:write",
+        "x-err-codes": [23001, 23002]
+      }
+    },
+    "/api/v1/tasks/{id}/cancel": {
+      "post": {
+        "tags": ["testing"],
+        "summary": "停止/取消任务",
+        "operationId": "cancelTask",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "取消成功（running→cancelled）",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "testing.task:write",
+        "x-err-codes": [23001]
+      }
+    },
+    "/api/v1/tasks/{id}/retry": {
+      "post": {
+        "tags": ["testing"],
+        "summary": "重试失败任务",
+        "operationId": "retryTask",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "重试成功（failed→pending，复用原快照）",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "testing.task:write",
+        "x-err-codes": [23001]
+      }
+    },
+    "/api/v1/tasks/{id}/cleanup": {
+      "post": {
+        "tags": ["testing"],
+        "summary": "任务清理确认（失败保留现场后人工确认）",
+        "operationId": "cleanupTask",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "清理确认成功（cleanup_pending→cleaning→finished）",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "testing.task:write",
+        "x-err-codes": [23001]
+      }
+    },
+    "/api/v1/reports": {
+      "get": {
+        "tags": ["report"],
+        "summary": "报告列表（筛选/分页）",
+        "operationId": "listReports",
+        "parameters": [
+          { "name": "task_id", "in": "query", "schema": { "type": "string" }, "description": "归属任务 ID" },
+          { "name": "type", "in": "query", "schema": { "type": "string", "enum": ["html", "pdf", "word"] }, "description": "报告类型" },
+          { "name": "status", "in": "query", "schema": { "type": "string" }, "description": "报告状态" },
+          { "name": "source", "in": "query", "schema": { "type": "string", "enum": ["internal", "external"] }, "description": "来源：internal 内部 / external 外部导入" },
+          { "name": "start_time", "in": "query", "schema": { "type": "string", "format": "date-time" }, "description": "起始时间" },
+          { "name": "end_time", "in": "query", "schema": { "type": "string", "format": "date-time" }, "description": "结束时间" },
+          { "$ref": "#/components/parameters/KeywordParam" },
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/PageSizeParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "报告列表",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReportListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "report.list:read",
+        "x-err-codes": []
+      }
+    },
+    "/api/v1/reports/import": {
+      "post": {
+        "tags": ["report"],
+        "summary": "导入报告（上传，支持孤立归档）",
+        "operationId": "importReport",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": { "type": "string", "format": "binary", "description": "报告文件（html/pdf/docx）" },
+                  "task_id": { "type": "string", "description": "可选，归属任务；为空则孤立归档（source=external）" },
+                  "product_id": { "type": "string", "description": "可选，归属产品" }
+                },
+                "required": ["file"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "导入成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReportDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "report.list:write",
+        "x-err-codes": [24002, 24003]
+      }
+    },
+    "/api/v1/reports/{id}": {
+      "get": {
+        "tags": ["report"],
+        "summary": "报告详情（含摘要/达标统计）",
+        "operationId": "getReport",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "报告元数据 + summary + artifacts[]",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReportDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "report.list:read",
+        "x-err-codes": [10301]
+      }
+    },
+    "/api/v1/reports/{id}/generate": {
+      "post": {
+        "tags": ["report"],
+        "summary": "生成/重新生成报告",
+        "operationId": "generateReport",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "重新生成触发成功（generation_failed→generating）",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReportDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "report.list:write",
+        "x-err-codes": [24004]
+      }
+    },
+    "/api/v1/reports/{id}/export": {
+      "get": {
+        "tags": ["report"],
+        "summary": "导出/下载报告",
+        "operationId": "exportReport",
+        "parameters": [
+          { "$ref": "#/components/parameters/IdParam" },
+          { "name": "format", "in": "query", "required": true, "schema": { "type": "string", "enum": ["html", "pdf", "word"] }, "description": "导出格式" }
+        ],
+        "responses": {
+          "200": {
+            "description": "文件流（Content-Disposition: attachment）",
+            "content": {
+              "application/octet-stream": { "schema": { "type": "string", "format": "binary" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "report.list:read",
+        "x-err-codes": [24001]
+      }
+    },
+    "/api/v1/reports/{id}/artifact": {
+      "get": {
+        "tags": ["report"],
+        "summary": "在线查看/下载产物（html/pdf 内联）",
+        "operationId": "getReportArtifact",
+        "parameters": [
+          { "$ref": "#/components/parameters/IdParam" },
+          { "name": "format", "in": "query", "required": true, "schema": { "type": "string", "enum": ["html", "pdf", "word"] }, "description": "产物格式" }
+        ],
+        "responses": {
+          "200": {
+            "description": "html 内联渲染 / pdf 内联预览 / word 附件下载",
+            "content": {
+              "text/html": { "schema": { "type": "string" } },
+              "application/pdf": { "schema": { "type": "string", "format": "binary" } },
+              "application/octet-stream": { "schema": { "type": "string", "format": "binary" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "report.list:read",
+        "x-err-codes": [24001]
+      }
+    },
+    "/api/v1/logs/user": {
+      "get": {
+        "tags": ["log"],
+        "summary": "用户日志查询",
+        "operationId": "listUserLogs",
+        "parameters": [
+          { "$ref": "#/components/parameters/LogStartTimeParam" },
+          { "$ref": "#/components/parameters/LogEndTimeParam" },
+          { "$ref": "#/components/parameters/KeywordParam" },
+          { "$ref": "#/components/parameters/LevelParam" },
+          { "name": "admin_id", "in": "query", "schema": { "type": "string" }, "description": "操作人 ID" },
+          { "name": "action", "in": "query", "schema": { "type": "string" }, "description": "动作枚举" },
+          { "name": "resource_type", "in": "query", "schema": { "type": "string" }, "description": "关联对象类型" },
+          { "name": "resource_id", "in": "query", "schema": { "type": "string" }, "description": "关联对象 ID" },
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/PageSizeParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "用户日志分页列表",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LogListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "log.user:read",
+        "x-err-codes": []
+      }
+    },
+    "/api/v1/logs/system": {
+      "get": {
+        "tags": ["log"],
+        "summary": "系统日志查询",
+        "operationId": "listSystemLogs",
+        "parameters": [
+          { "$ref": "#/components/parameters/LogStartTimeParam" },
+          { "$ref": "#/components/parameters/LogEndTimeParam" },
+          { "$ref": "#/components/parameters/KeywordParam" },
+          { "$ref": "#/components/parameters/LevelParam" },
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/PageSizeParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "系统日志分页列表",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LogListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "log.system:read",
+        "x-err-codes": []
+      }
+    },
+    "/api/v1/logs/test": {
+      "get": {
+        "tags": ["log"],
+        "summary": "测试日志查询",
+        "operationId": "listTestLogs",
+        "parameters": [
+          { "$ref": "#/components/parameters/LogStartTimeParam" },
+          { "$ref": "#/components/parameters/LogEndTimeParam" },
+          { "$ref": "#/components/parameters/KeywordParam" },
+          { "$ref": "#/components/parameters/LevelParam" },
+          { "name": "task_id", "in": "query", "schema": { "type": "string" }, "description": "按任务定位" },
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/PageSizeParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "测试日志分页列表",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LogListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "log.test:read",
+        "x-err-codes": [25001]
+      }
+    },
+    "/api/v1/admins": {
+      "get": {
+        "tags": ["system"],
+        "summary": "管理员列表",
+        "operationId": "listAdmins",
+        "parameters": [
+          { "$ref": "#/components/parameters/KeywordParam" },
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/PageSizeParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "管理员列表",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdminListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.admin:write",
+        "x-err-codes": []
+      },
+      "post": {
+        "tags": ["system"],
+        "summary": "新建管理员",
+        "operationId": "createAdmin",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AdminCreateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "新建的管理员（默认无权限，需角色授权）",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdminDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.admin:write",
+        "x-err-codes": [26001]
+      }
+    },
+    "/api/v1/admins/{id}": {
+      "get": {
+        "tags": ["system"],
+        "summary": "管理员详情",
+        "operationId": "getAdmin",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "管理员详情",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdminDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.admin:write",
+        "x-err-codes": [10301]
+      },
+      "put": {
+        "tags": ["system"],
+        "summary": "修改管理员",
+        "operationId": "updateAdmin",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AdminUpdateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的管理员",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdminDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.admin:write",
+        "x-err-codes": [10301, 10402]
+      },
+      "delete": {
+        "tags": ["system"],
+        "summary": "删除管理员",
+        "operationId": "deleteAdmin",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmptyResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.admin:write",
+        "x-err-codes": [26002]
+      }
+    },
+    "/api/v1/admins/{id}/status": {
+      "patch": {
+        "tags": ["system"],
+        "summary": "停用/启用管理员",
+        "operationId": "updateAdminStatus",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/StatusRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "状态更新成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdminDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.admin:write",
+        "x-err-codes": [26002]
+      }
+    },
+    "/api/v1/admins/{id}/reset-password": {
+      "post": {
+        "tags": ["system"],
+        "summary": "重置密码",
+        "operationId": "resetAdminPassword",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "new_password": { "type": "string", "description": "新密码（≥8 位，复杂度校验）" }
+                },
+                "required": ["new_password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "重置成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmptyResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.admin:write",
+        "x-err-codes": [10301]
+      }
+    },
+    "/api/v1/admins/{id}/roles": {
+      "get": {
+        "tags": ["system"],
+        "summary": "查询管理员角色",
+        "operationId": "getAdminRoles",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "该管理员绑定的角色列表",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdminRoleListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.admin:write",
+        "x-err-codes": [10301]
+      },
+      "post": {
+        "tags": ["system"],
+        "summary": "绑定角色（授权）",
+        "operationId": "bindAdminRoles",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "role_ids": { "type": "array", "items": { "type": "string" }, "description": "角色 ID 列表（全量替换）" }
+                },
+                "required": ["role_ids"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "授权成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdminRoleListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.admin:write",
+        "x-err-codes": [10301]
+      }
+    },
+    "/api/v1/roles": {
+      "get": {
+        "tags": ["system"],
+        "summary": "角色列表",
+        "operationId": "listRoles",
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/PageSizeParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "角色列表",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RoleListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.admin:write",
+        "x-err-codes": []
+      },
+      "post": {
+        "tags": ["system"],
+        "summary": "新建角色（含权限矩阵）",
+        "operationId": "createRole",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RoleRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "新建的角色",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RoleDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.admin:write",
+        "x-err-codes": [10302]
+      }
+    },
+    "/api/v1/roles/{id}": {
+      "get": {
+        "tags": ["system"],
+        "summary": "角色详情",
+        "operationId": "getRole",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "角色详情",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RoleDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.admin:write",
+        "x-err-codes": [10301]
+      },
+      "put": {
+        "tags": ["system"],
+        "summary": "修改角色（含权限矩阵）",
+        "operationId": "updateRole",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RoleRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的角色",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RoleDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.admin:write",
+        "x-err-codes": [10301, 10402]
+      },
+      "delete": {
+        "tags": ["system"],
+        "summary": "删除角色",
+        "operationId": "deleteRole",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmptyResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.admin:write",
+        "x-err-codes": [26003]
+      }
+    },
+    "/api/v1/permissions": {
+      "get": {
+        "tags": ["system"],
+        "summary": "权限点清单（子模块元数据）",
+        "operationId": "listPermissions",
+        "responses": {
+          "200": {
+            "description": "子模块授权项元数据（module_code + 可授权限 + 是否敏感）",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PermissionListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.admin:write",
+        "x-err-codes": []
+      }
+    },
+    "/api/v1/certificates": {
+      "get": {
+        "tags": ["system"],
+        "summary": "证书列表",
+        "operationId": "listCertificates",
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/PageSizeParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "证书列表（私钥加密存储，响应脱敏）",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CertificateListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.cert:write",
+        "x-err-codes": []
+      },
+      "post": {
+        "tags": ["system"],
+        "summary": "导入证书",
+        "operationId": "importCertificate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": { "type": "string", "format": "binary", "description": "证书文件" },
+                  "name": { "type": "string" },
+                  "issuer": { "type": "string" },
+                  "valid_from": { "type": "string", "format": "date" },
+                  "valid_to": { "type": "string", "format": "date" },
+                  "associated_service": { "type": "string" }
+                },
+                "required": ["file"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "导入的证书",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CertificateDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.cert:write",
+        "x-err-codes": [10302]
+      }
+    },
+    "/api/v1/certificates/{id}": {
+      "delete": {
+        "tags": ["system"],
+        "summary": "删除证书",
+        "operationId": "deleteCertificate",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmptyResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.cert:write",
+        "x-err-codes": [26004]
+      }
+    },
+    "/api/v1/certificates/{id}/reinit": {
+      "post": {
+        "tags": ["system"],
+        "summary": "重新初始化内置证书",
+        "operationId": "reinitCertificate",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "重新初始化成功（仅更新有效期）",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CertificateDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.cert:write",
+        "x-err-codes": [10401]
+      }
+    },
+    "/api/v1/ssh-hosts": {
+      "get": {
+        "tags": ["system"],
+        "summary": "SSH/Host 列表",
+        "operationId": "listSshHosts",
+        "parameters": [
+          { "$ref": "#/components/parameters/PageParam" },
+          { "$ref": "#/components/parameters/PageSizeParam" }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSH/Host 列表（私钥加密存储）",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SSHHostListResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.ssh:write",
+        "x-err-codes": []
+      },
+      "post": {
+        "tags": ["system"],
+        "summary": "添加 SSH/Host",
+        "operationId": "createSshHost",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SSHHostRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "添加的 SSH/Host",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SSHHostDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.ssh:write",
+        "x-err-codes": [10302]
+      }
+    },
+    "/api/v1/ssh-hosts/import": {
+      "post": {
+        "tags": ["system"],
+        "summary": "批量导入 SSH/Host",
+        "operationId": "importSshHosts",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": { "type": "string", "format": "binary", "description": "JSON/CSV 文件，逐行解析，重复项跳过" }
+                },
+                "required": ["file"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "批量导入结果",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmptyResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.ssh:write",
+        "x-err-codes": [24002]
+      }
+    },
+    "/api/v1/ssh-hosts/{id}": {
+      "put": {
+        "tags": ["system"],
+        "summary": "修改 SSH/Host",
+        "operationId": "updateSshHost",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SSHHostRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的 SSH/Host",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SSHHostDetailResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.ssh:write",
+        "x-err-codes": [10301, 10402]
+      },
+      "delete": {
+        "tags": ["system"],
+        "summary": "删除 SSH/Host",
+        "operationId": "deleteSshHost",
+        "parameters": [{ "$ref": "#/components/parameters/IdParam" }],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmptyResponse" } } }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        },
+        "security": [{ "BearerAuth": [] }],
+        "x-permission": "setting.ssh:write",
+        "x-err-codes": [26005]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT（HS256），请求头 Authorization: Bearer <token>；权限不入 token，服务端实时读 DB RBAC"
+      }
+    },
+    "parameters": {
+      "IdParam": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "资源 ID（bigint 自增，JSON 序列化为字符串；路径接受数字或字符串）",
+        "schema": { "type": "string" }
+      },
+      "PageParam": {
+        "name": "page",
+        "in": "query",
+        "required": false,
+        "description": "页码，从 1 开始，默认 1",
+        "schema": { "type": "integer", "minimum": 1, "default": 1 }
+      },
+      "PageSizeParam": {
+        "name": "page_size",
+        "in": "query",
+        "required": false,
+        "description": "每页条数，默认 20，上限 200（超过强制截断或返回 10003）",
+        "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 20 }
+      },
+      "SortParam": {
+        "name": "sort",
+        "in": "query",
+        "required": false,
+        "description": "排序字段（白名单校验，非法忽略）",
+        "schema": { "type": "string" }
+      },
+      "OrderParam": {
+        "name": "order",
+        "in": "query",
+        "required": false,
+        "description": "排序方向",
+        "schema": { "type": "string", "enum": ["asc", "desc"] }
+      },
+      "KeywordParam": {
+        "name": "keyword",
+        "in": "query",
+        "required": false,
+        "description": "名称/编码关键字",
+        "schema": { "type": "string" }
+      },
+      "LevelParam": {
+        "name": "level",
+        "in": "query",
+        "required": false,
+        "description": "日志级别",
+        "schema": { "type": "string", "enum": ["info", "warn", "error"] }
+      },
+      "LogStartTimeParam": {
+        "name": "start_time",
+        "in": "query",
+        "required": false,
+        "description": "起始时间（RFC3339/ISO8601）",
+        "schema": { "type": "string", "format": "date-time" }
+      },
+      "LogEndTimeParam": {
+        "name": "end_time",
+        "in": "query",
+        "required": false,
+        "description": "结束时间（RFC3339/ISO8601）",
+        "schema": { "type": "string", "format": "date-time" }
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "统一错误响应 {code,message,data}；HTTP 状态码与 code 语义对齐（认证 401/鉴权 403/校验业务 400/冲突 409/限流 429/服务端 500）",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "description": "统一响应基础结构（所有 HTTP 接口，含错误，均返回该结构；文件下载类接口除外）",
+        "properties": {
+          "code": { "type": "integer", "description": "业务码，0 成功，非 0 失败", "example": 0 },
+          "message": { "type": "string", "description": "人类可读描述，成功为 ok", "example": "ok" },
+          "data": { "description": "业务载荷，object/array/null", "nullable": true }
+        }
+      },
+      "ErrorResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "code": { "type": "integer", "example": 10001 },
+              "message": { "type": "string", "example": "参数错误" },
+              "data": { "nullable": true, "description": "错误时省略或为 null" }
+            }
+          }
+        ]
+      },
+      "EmptyResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "data": { "nullable": true, "description": "无业务载荷，为 null" }
+            }
+          }
+        ]
+      },
+      "PageData": {
+        "type": "object",
+        "description": "分页响应 data 通用结构（list 元素类型由具体接口覆盖）",
+        "properties": {
+          "list": { "type": "array", "items": {}, "description": "数据列表" },
+          "total": { "type": "integer", "description": "总条数" },
+          "page": { "type": "integer", "description": "当前页" },
+          "page_size": { "type": "integer", "description": "每页条数" }
+        }
+      },
+      "Admin": {
+        "type": "object",
+        "description": "管理员信息（不含 password_hash，PII 脱敏）",
+        "properties": {
+          "id": { "type": "string" },
+          "username": { "type": "string" },
+          "name": { "type": "string" },
+          "phone": { "type": "string" },
+          "email": { "type": "string" },
+          "description": { "type": "string" },
+          "status": { "type": "string", "enum": ["enabled", "disabled"] },
+          "is_builtin": { "type": "boolean" },
+          "must_change_password": { "type": "boolean" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": { "type": "string", "description": "登录名" },
+          "password": { "type": "string", "description": "明文口令（仅传输层加密，服务端 bcrypt 比对）" }
+        }
+      },
+      "LoginData": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string", "description": "JWT" },
+          "expires_in": { "type": "integer", "description": "有效秒数" },
+          "admin": { "$ref": "#/components/schemas/Admin" },
+          "permissions": { "type": "array", "items": { "type": "string" }, "description": "权限点并集" },
+          "must_change_password": { "type": "boolean" }
+        }
+      },
+      "LoginResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/LoginData" } } }
+        ]
+      },
+      "MeData": {
+        "type": "object",
+        "properties": {
+          "admin": { "$ref": "#/components/schemas/Admin" },
+          "permissions": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "MeResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/MeData" } } }
+        ]
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "required": ["old_password", "new_password"],
+        "properties": {
+          "old_password": { "type": "string", "description": "旧密码（首登场景即初始密码）" },
+          "new_password": { "type": "string", "description": "新密码，复杂度校验（≥8 位，含大小写/数字/特殊字符）" }
+        }
+      },
+      "EnvironmentCategory": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "code": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      },
+      "EnvironmentCategoryRequest": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "code": { "type": "string", "description": "唯一约束" },
+          "description": { "type": "string" }
+        }
+      },
+      "EnvironmentCategoryListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "list": { "type": "array", "items": { "$ref": "#/components/schemas/EnvironmentCategory" } },
+                  "total": { "type": "integer" },
+                  "page": { "type": "integer" },
+                  "page_size": { "type": "integer" }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "EnvironmentCategoryDetailResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/EnvironmentCategory" } } }
+        ]
+      },
+      "Tag": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "environment_count": { "type": "integer", "description": "关联环境数" }
+        }
+      },
+      "TagRequest": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "description": "唯一约束" },
+          "description": { "type": "string" }
+        }
+      },
+      "TagListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "list": { "type": "array", "items": { "$ref": "#/components/schemas/Tag" } },
+                  "total": { "type": "integer" },
+                  "page": { "type": "integer" },
+                  "page_size": { "type": "integer" }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "TagDetailResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Tag" } } }
+        ]
+      },
+      "Environment": {
+        "type": "object",
+        "description": "环境实体（hosts 按权限裁剪脱敏）",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "code": { "type": "string", "description": "环境编码，唯一约束" },
+          "category_id": { "type": "string" },
+          "tag_ids": { "type": "array", "items": { "type": "string" } },
+          "type": { "type": "string", "enum": ["single", "cluster"] },
+          "hosts": { "type": "array", "items": { "type": "string" }, "description": "IP/域名列表，按权限裁剪" },
+          "os": { "type": "string" },
+          "ssh_host_id": { "type": "string" },
+          "cert_id": { "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "testing", "disabled"] },
+          "version": { "type": "integer", "description": "乐观锁版本号" },
+          "description": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "EnvironmentRequest": {
+        "type": "object",
+        "description": "新建/修改环境请求体（修改须携带 version 乐观锁版本号）",
+        "properties": {
+          "name": { "type": "string" },
+          "code": { "type": "string" },
+          "category_id": { "type": "string", "description": "分类必填" },
+          "tag_ids": { "type": "array", "items": { "type": "string" }, "description": "预定义标签复选" },
+          "type": { "type": "string", "enum": ["single", "cluster"] },
+          "hosts": { "type": "array", "items": { "type": "string" } },
+          "os": { "type": "string" },
+          "ssh_host_id": { "type": "string" },
+          "cert_id": { "type": "string" },
+          "version": { "type": "integer", "description": "乐观锁版本号（修改时必填）" },
+          "description": { "type": "string" }
+        }
+      },
+      "EnvironmentStatusRequest": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["pending", "disabled"], "description": "目标状态" }
+        }
+      },
+      "EnvironmentListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "list": { "type": "array", "items": { "$ref": "#/components/schemas/Environment" } },
+                  "total": { "type": "integer" },
+                  "page": { "type": "integer" },
+                  "page_size": { "type": "integer" }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "EnvironmentDetailResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Environment" } } }
+        ]
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "code": { "type": "string", "description": "产品编码，唯一约束" },
+          "version": { "type": "string" },
+          "platform": { "type": "string" },
+          "status": { "type": "string", "enum": ["enabled", "disabled"] },
+          "description": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ProductRequest": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "code": { "type": "string" },
+          "version": { "type": "string" },
+          "platform": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      },
+      "ProductListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "list": { "type": "array", "items": { "$ref": "#/components/schemas/Product" } },
+                  "total": { "type": "integer" },
+                  "page": { "type": "integer" },
+                  "page_size": { "type": "integer" }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ProductDetailResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Product" } } }
+        ]
+      },
+      "ProductInterface": {
+        "type": "object",
+        "description": "接口实体（归属单一产品，不跨产品共享；认证头加密存储，响应脱敏）",
+        "properties": {
+          "id": { "type": "string" },
+          "product_id": { "type": "string" },
+          "name": { "type": "string" },
+          "url": { "type": "string" },
+          "method": { "type": "string", "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"] },
+          "headers": { "type": "object", "description": "认证头脱敏后返回" },
+          "body": { "type": "object", "description": "参数模板 JSON" },
+          "timeouts": { "type": "object" },
+          "description": { "type": "string" },
+          "enabled": { "type": "boolean" }
+        }
+      },
+      "InterfaceRequest": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "url": { "type": "string" },
+          "method": { "type": "string", "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"] },
+          "headers": { "type": "object", "description": "认证头 AES-256-GCM 加密存储" },
+          "body": { "type": "object" },
+          "timeouts": { "type": "object" },
+          "description": { "type": "string" },
+          "enabled": { "type": "boolean" }
+        }
+      },
+      "InterfaceListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "list": { "type": "array", "items": { "$ref": "#/components/schemas/ProductInterface" } },
+                  "total": { "type": "integer" },
+                  "page": { "type": "integer" },
+                  "page_size": { "type": "integer" }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "InterfaceDetailResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/ProductInterface" } } }
+        ]
+      },
+      "Threshold": {
+        "type": "object",
+        "properties": {
+          "metric": { "type": "string", "enum": ["avg_rt", "p95", "p99", "max_rt", "throughput", "error_rate", "success_rate", "concurrency"] },
+          "operator": { "type": "string", "enum": ["le", "ge"], "description": "le=≤（越小越好）/ ge=≥（越大越好）" },
+          "value": { "type": "number" },
+          "unit": { "type": "string", "enum": ["ms", "%", "req/s", "个"] },
+          "enabled": { "type": "boolean" }
+        }
+      },
+      "ThresholdsRequest": {
+        "type": "object",
+        "required": ["thresholds"],
+        "properties": {
+          "thresholds": { "type": "array", "items": { "$ref": "#/components/schemas/Threshold" }, "description": "全量替换" }
+        }
+      },
+      "ThresholdListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "list": { "type": "array", "items": { "$ref": "#/components/schemas/Threshold" } }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Template": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "content": { "type": "object", "description": "模板内容（流程/参数配置）" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "TemplateRequest": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "content": { "type": "object" }
+        }
+      },
+      "TemplateListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "list": { "type": "array", "items": { "$ref": "#/components/schemas/Template" } },
+                  "total": { "type": "integer" },
+                  "page": { "type": "integer" },
+                  "page_size": { "type": "integer" }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "TemplateDetailResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Template" } } }
+        ]
+      },
+      "FlowConfig": {
+        "type": "object",
+        "description": "压测流程参数（参数白名单校验）",
+        "properties": {
+          "concurrency_mode": { "type": "string", "enum": ["fixed", "ramp", "pulse"] },
+          "target_vus": { "type": "integer", "description": "并发数，正整数且 ≤ max_vus" },
+          "ramp_stages": { "type": "array", "items": { "type": "object", "properties": { "vus": { "type": "integer" }, "duration": { "type": "string" } } } },
+          "duration": { "type": "string" },
+          "warmup": { "type": "string" },
+          "timeout": { "type": "string" },
+          "think_time": { "type": "string" },
+          "parameterization": { "type": "object" }
+        }
+      },
+      "Task": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "template_id": { "type": "string" },
+          "environment_id": { "type": "string" },
+          "product_ids": { "type": "array", "items": { "type": "string" } },
+          "interface_ids": { "type": "array", "items": { "type": "string" } },
+          "flow": { "$ref": "#/components/schemas/FlowConfig" },
+          "report_config": { "type": "object" },
+          "clean_config": { "type": "object" },
+          "auto_start": { "type": "boolean" },
+          "status": { "type": "string", "enum": ["pending", "running", "collecting", "evaluating", "generating", "finished", "failed", "cancelled", "cleanup_pending", "cleaning"] },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "TaskCreateRequest": {
+        "type": "object",
+        "required": ["name", "environment_id", "interface_ids", "flow", "report_config", "clean_config"],
+        "properties": {
+          "name": { "type": "string" },
+          "template_id": { "type": "string" },
+          "environment_id": { "type": "string" },
+          "product_ids": { "type": "array", "items": { "type": "string" } },
+          "interface_ids": { "type": "array", "items": { "type": "string" }, "description": "本次接口范围（须非空，可跨产品多接口）" },
+          "flow": { "$ref": "#/components/schemas/FlowConfig" },
+          "report_config": { "type": "object", "description": "formats: [html,pdf,word] 默认全量" },
+          "clean_config": { "type": "object", "description": "动作列表 + 执行时机" },
+          "auto_start": { "type": "boolean", "default": false, "description": "创建后立即执行" }
+        }
+      },
+      "TaskListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "list": { "type": "array", "items": { "$ref": "#/components/schemas/Task" } },
+                  "total": { "type": "integer" },
+                  "page": { "type": "integer" },
+                  "page_size": { "type": "integer" }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "TaskDetailResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Task" } } }
+        ]
+      },
+      "ReportArtifact": {
+        "type": "object",
+        "properties": {
+          "format": { "type": "string", "enum": ["html", "pdf", "word"] },
+          "path": { "type": "string" },
+          "size": { "type": "integer" }
+        }
+      },
+      "Report": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "task_id": { "type": "string" },
+          "product_id": { "type": "string" },
+          "type": { "type": "string", "enum": ["html", "pdf", "word"] },
+          "status": { "type": "string" },
+          "source": { "type": "string", "enum": ["internal", "external"] },
+          "summary": { "type": "object", "description": "达标统计、关键指标摘要" },
+          "artifacts": { "type": "array", "items": { "$ref": "#/components/schemas/ReportArtifact" } },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ReportListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "list": { "type": "array", "items": { "$ref": "#/components/schemas/Report" } },
+                  "total": { "type": "integer" },
+                  "page": { "type": "integer" },
+                  "page_size": { "type": "integer" }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ReportDetailResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Report" } } }
+        ]
+      },
+      "LogEntry": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "level": { "type": "string", "enum": ["info", "warn", "error"] },
+          "message": { "type": "string" },
+          "admin_id": { "type": "string" },
+          "action": { "type": "string" },
+          "resource_type": { "type": "string" },
+          "resource_id": { "type": "string" },
+          "task_id": { "type": "string" }
+        }
+      },
+      "LogListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "list": { "type": "array", "items": { "$ref": "#/components/schemas/LogEntry" } },
+                  "total": { "type": "integer" },
+                  "page": { "type": "integer" },
+                  "page_size": { "type": "integer" }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "AdminCreateRequest": {
+        "type": "object",
+        "required": ["username", "name", "password"],
+        "description": "防 Mass Assignment：仅白名单字段绑定",
+        "properties": {
+          "username": { "type": "string", "description": "唯一" },
+          "name": { "type": "string" },
+          "phone": { "type": "string" },
+          "email": { "type": "string" },
+          "description": { "type": "string" },
+          "password": { "type": "string", "description": "≥8 位" }
+        }
+      },
+      "AdminUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "phone": { "type": "string" },
+          "email": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      },
+      "AdminListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "list": { "type": "array", "items": { "$ref": "#/components/schemas/Admin" } },
+                  "total": { "type": "integer" },
+                  "page": { "type": "integer" },
+                  "page_size": { "type": "integer" }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "AdminDetailResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Admin" } } }
+        ]
+      },
+      "AdminRoleListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "role_ids": { "type": "array", "items": { "type": "string" } },
+                  "roles": { "type": "array", "items": { "$ref": "#/components/schemas/Role" } }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Role": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "module": { "type": "string", "description": "module_code" },
+                "permission": { "type": "string", "enum": ["read", "write"] }
+              }
+            }
+          }
+        }
+      },
+      "RoleRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "module": { "type": "string" },
+                "permission": { "type": "string", "enum": ["read", "write"] }
+              }
+            }
+          }
+        }
+      },
+      "RoleListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "list": { "type": "array", "items": { "$ref": "#/components/schemas/Role" } },
+                  "total": { "type": "integer" },
+                  "page": { "type": "integer" },
+                  "page_size": { "type": "integer" }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "RoleDetailResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Role" } } }
+        ]
+      },
+      "PermissionItem": {
+        "type": "object",
+        "properties": {
+          "module": { "type": "string", "description": "模块中文名" },
+          "module_code": { "type": "string" },
+          "grantable": { "type": "array", "items": { "type": "string", "enum": ["read", "write"] }, "description": "可授权限" },
+          "sensitive": { "type": "boolean" }
+        }
+      },
+      "PermissionListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "list": { "type": "array", "items": { "$ref": "#/components/schemas/PermissionItem" } }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Certificate": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "issuer": { "type": "string" },
+          "valid_from": { "type": "string", "format": "date" },
+          "valid_to": { "type": "string", "format": "date" },
+          "associated_service": { "type": "string" },
+          "is_builtin": { "type": "boolean", "description": "内置自签证书，不可删除" }
+        }
+      },
+      "CertificateListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "list": { "type": "array", "items": { "$ref": "#/components/schemas/Certificate" } },
+                  "total": { "type": "integer" },
+                  "page": { "type": "integer" },
+                  "page_size": { "type": "integer" }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CertificateDetailResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Certificate" } } }
+        ]
+      },
+      "SSHHost": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string", "enum": ["host", "ssh"] },
+          "host": { "type": "string" },
+          "port": { "type": "integer" },
+          "user": { "type": "string" },
+          "auth_type": { "type": "string", "enum": ["password", "key"] },
+          "host_entries": { "type": "array", "items": { "type": "string" }, "description": "Host 解析内容" },
+          "description": { "type": "string" }
+        }
+      },
+      "SSHHostRequest": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "enum": ["host", "ssh"] },
+          "host": { "type": "string" },
+          "port": { "type": "integer" },
+          "user": { "type": "string" },
+          "auth_type": { "type": "string", "enum": ["password", "key"] },
+          "key": { "type": "string", "description": "SSH 私钥，加密存储" },
+          "host_entries": { "type": "array", "items": { "type": "string" } },
+          "description": { "type": "string" }
+        }
+      },
+      "SSHHostListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "list": { "type": "array", "items": { "$ref": "#/components/schemas/SSHHost" } },
+                  "total": { "type": "integer" },
+                  "page": { "type": "integer" },
+                  "page_size": { "type": "integer" }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "SSHHostDetailResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiResponse" },
+          { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/SSHHost" } } }
+        ]
+      },
+      "StatusRequest": {
+        "type": "object",
+        "description": "通用状态切换请求体",
+        "properties": {
+          "status": { "type": "string", "description": "目标状态（enabled/disabled 或 pending/disabled 等）" }
+        }
+      }
+    }
+  }
+}
