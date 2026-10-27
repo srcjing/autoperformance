@@ -285,10 +285,17 @@ manifest_dep_bundled() {
 # http_get <url>：优先 curl，其次 wget（离线最小系统可能只有其一）
 http_get() {
   local url="$1"
+  local insecure=""
+  # HTTPS 使用服务自签证书时跳过校验（仅本机健康检查/探测用）
+  [[ "$url" == https://* ]] && insecure="-k"
   if command -v curl >/dev/null 2>&1; then
-    curl -fsS --max-time 5 "$url" 2>/dev/null
+    curl -fsS $insecure --max-time 5 "$url" 2>/dev/null
   elif command -v wget >/dev/null 2>&1; then
-    wget -qO- --timeout=5 "$url" 2>/dev/null
+    if [[ -n "$insecure" ]]; then
+      wget --no-check-certificate -qO- --timeout=5 "$url" 2>/dev/null
+    else
+      wget -qO- --timeout=5 "$url" 2>/dev/null
+    fi
   else
     return 127
   fi
@@ -373,4 +380,17 @@ prune_backups() {
       log_info "清理旧备份: $d"
     fi
   done < <(find "$dir" -mindepth 1 -maxdepth 1 -type d -name '2*' | sort -r)
+}
+
+# is_tls_enabled <config>：判断配置中 server.tls.enabled 是否为 true（用于健康检查 scheme 选择）。
+is_tls_enabled() {
+  local file="${1:-${CONFIG_FILE:-}}"
+  [[ -f "$file" ]] || return 1
+  awk '
+    /^server:[[:space:]]*$/ { s=1; next }
+    s && /^[^[:space:]#]/ { s=0 }
+    s && /^[[:space:]]+tls:[[:space:]]*$/ { t=1; next }
+    t && /^[[:space:]]+enabled:[[:space:]]*true/ { found=1; exit }
+    END { exit(found?0:1) }
+  ' "$file"
 }

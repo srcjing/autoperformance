@@ -368,10 +368,14 @@ render_config() {
 # 覆盖优先级：环境变量 AUTO_PERF_* > 本文件 > 内置默认值。
 server:
   host: "0.0.0.0"
-  port: 8080
+  port: 8443
   mode: "release"
   static_dir: "./web/dist"          # 前端已内嵌进二进制，此项保留兼容
   tmp_dir: "${DATA_DIR}/tmp"
+  tls:
+    enabled: true
+    cert_file: "${DATA_DIR}/tls/server.crt"
+    key_file: "${DATA_DIR}/tls/server.key"
 
 database:
   host: "${DB_HOST}"
@@ -613,6 +617,24 @@ run_migrate() {
   log_info "数据库迁移完成（migrate up）"
 }
 
+# init_tls：从证书管理的内置自签证书生成服务 HTTPS 证书/私钥（证书自己用，DES-I-002）。
+init_tls() {
+  if ! is_tls_enabled "$CONFIG_FILE"; then
+    log_info "TLS 未启用，跳过服务证书初始化"
+    return 0
+  fi
+  local certf keyf
+  certf="$(yaml_scalar "$CONFIG_FILE" server cert_file)"
+  keyf="$(yaml_scalar "$CONFIG_FILE" server key_file)"
+  log_info "生成服务 TLS 证书（来源：证书管理内置自签证书）"
+  run_as "$SERVICE_USER" env HOME="$DATA_DIR" \
+    "${INSTALL_DIR}/bin/auto_performance" -config "$CONFIG_FILE" tls-init \
+    || die "$EXIT_CONFIG" "tls-init 失败（生成服务 HTTPS 证书）"
+  [[ -f "$certf" && -f "$keyf" ]] || die "$EXIT_CONFIG" "TLS 证书文件缺失: ${certf} / ${keyf}"
+  chmod 0600 "$keyf" 2>/dev/null || true
+  log_info "服务 TLS 证书已就绪: ${certf}"
+}
+
 install_service_unit() {
   local unit="/etc/systemd/system/${SERVICE_NAME}.service"
   local after="network-online.target"
@@ -686,9 +708,11 @@ start_service() {
     die "$EXIT_SERVICE" "服务启动失败（见上方 journalctl 输出）"
   fi
 
-  local port url
+  local port url scheme
   port="$(yaml_scalar "$CONFIG_FILE" server port)"
-  url="http://127.0.0.1:${port:-8080}/healthz"
+  scheme="http"
+  is_tls_enabled "$CONFIG_FILE" && scheme="https"
+  url="${scheme}://127.0.0.1:${port:-8443}/healthz"
   if ! wait_healthy "$url" 60 1; then
     journalctl -u "$SERVICE_NAME" -n 50 --no-pager >&2 || true
     die "$EXIT_HEALTH" "服务健康检查失败（${url}）"
@@ -696,9 +720,11 @@ start_service() {
 }
 
 print_summary() {
-  local port url
+  local port url scheme
   port="$(yaml_scalar "$CONFIG_FILE" server port)"
-  url="http://127.0.0.1:${port:-8080}/"
+  scheme="http"
+  is_tls_enabled "$CONFIG_FILE" && scheme="https"
+  url="${scheme}://127.0.0.1:${port:-8443}/"
 
   cat <<EOF
 
@@ -731,6 +757,7 @@ main() {
   ensure_kek
   setup_database
   run_migrate
+  init_tls
 
   if [[ "$SKIP_SYSTEMD" == "1" ]]; then
     log_info "跳过 systemd 注册（--skip-systemd）"

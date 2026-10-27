@@ -16,6 +16,8 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -434,4 +436,58 @@ func generateSelfSignedCert(cn string, notBefore, notAfter time.Time) ([]byte, [
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
 	return certPEM, keyPEM, nil
+}
+
+// Activate 将指定证书（certID<=0 表示内置自签证书）解密并写入服务 TLS 证书/私钥文件。
+// 供 `auto_performance tls-init` 子命令与「设为服务证书」接口调用；重启服务后生效。
+// 私钥落地权限 0600、目录 0700（DES-I-008）。
+func (s *Service) Activate(ctx context.Context, certID int64, certFile, keyFile string) (string, string, error) {
+	var rec *domain.Certificate
+	var err error
+	if certID <= 0 {
+		var certs []domain.Certificate
+		certs, err = s.certs.ListCertificates(ctx)
+		if err != nil {
+			return "", "", err
+		}
+		for i := range certs {
+			if certs[i].IsBuiltin {
+				rec = &certs[i]
+				break
+			}
+		}
+		if rec == nil {
+			return "", "", errcode.ErrNotFound
+		}
+	} else {
+		rec, err = s.certs.GetCertificate(ctx, certID)
+		if err != nil {
+			return "", "", err
+		}
+	}
+	if len(rec.CertEnc) == 0 || len(rec.KeyEnc) == 0 {
+		// 无配对私钥的证书不能用于 TLS。
+		return "", "", errcode.ErrParamMiss
+	}
+	certPEM, err := crypto.DecryptSecret(rec.CertEnc, s.kek)
+	if err != nil {
+		return "", "", fmt.Errorf("解密证书失败: %w", err)
+	}
+	keyPEM, err := crypto.DecryptSecret(rec.KeyEnc, s.kek)
+	if err != nil {
+		return "", "", fmt.Errorf("解密私钥失败: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(certFile), 0o700); err != nil {
+		return "", "", err
+	}
+	if err := os.MkdirAll(filepath.Dir(keyFile), 0o700); err != nil {
+		return "", "", err
+	}
+	if err := os.WriteFile(certFile, certPEM, 0o600); err != nil {
+		return "", "", err
+	}
+	if err := os.WriteFile(keyFile, keyPEM, 0o600); err != nil {
+		return "", "", err
+	}
+	return certFile, keyFile, nil
 }

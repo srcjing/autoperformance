@@ -92,6 +92,8 @@ func main() {
 		runMigrate(cfg, sub)
 	case "healthcheck":
 		runHealthcheck(cfg)
+	case "tls-init":
+		runTLSInit(cfg)
 	case "version":
 		fmt.Println(version)
 	default:
@@ -349,7 +351,14 @@ func serve(cfg *config.Config) {
 	}
 
 	go func() {
-		log.Printf("auto_performance server v%s 启动，监听 %s", version, srv.Addr)
+		if cfg.Server.TLS.Enabled {
+			log.Printf("auto_performance server v%s 启动，HTTPS 监听 %s（cert=%s）", version, srv.Addr, cfg.Server.TLS.CertFile)
+			if err := srv.ListenAndServeTLS(cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Fatalf("HTTPS server 异常退出: %v", err)
+			}
+			return
+		}
+		log.Printf("auto_performance server v%s 启动，HTTP 监听 %s", version, srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("HTTP server 异常退出: %v", err)
 		}
@@ -492,4 +501,35 @@ func runHealthcheck(cfg *config.Config) {
 		log.Fatalf("健康检查失败（%s）: HTTP %d body=%s", url, resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	fmt.Printf("healthy: %s -> HTTP %d %s\n", url, resp.StatusCode, strings.TrimSpace(string(body)))
+}
+
+// runTLSInit 从证书管理中的证书（certID 0 = 内置自签证书）解密并落盘为服务 TLS 证书/私钥。
+// 供 install.sh（首装生成 HTTPS 证书）与"设为服务证书"流程使用；重启服务后生效。
+func runTLSInit(cfg *config.Config) {
+	db, err := repository.Open(cfg.Database)
+	if err != nil {
+		log.Fatalf("tls-init: 数据库初始化失败: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewRepository(db)
+	kek, kekSource := settingsKEK(cfg)
+	log.Printf("tls-init: KEK 来源 %s", kekSource)
+	svc := settingsvc.New(repo, nil).WithSecrets(repo, repo, kek)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	// 首次安装：确保内置自签证书已生成（幂等）。
+	if err := svc.EnsureBuiltinCertificate(ctx); err != nil {
+		log.Printf("tls-init: 确保内置自签证书失败（继续尝试激活）: %v", err)
+	}
+
+	certFile := cfg.Server.TLS.CertFile
+	keyFile := cfg.Server.TLS.KeyFile
+	c, k, err := svc.Activate(ctx, 0, certFile, keyFile)
+	if err != nil {
+		log.Fatalf("tls-init: 生成 TLS 证书失败: %v", err)
+	}
+	log.Printf("tls-init: 已写入 TLS 证书 %s、私钥 %s（重启服务后生效）", c, k)
 }

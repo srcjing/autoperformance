@@ -25,11 +25,19 @@ type Config struct {
 
 // ServerConfig HTTP 服务配置。
 type ServerConfig struct {
-	Host      string `mapstructure:"host"`
-	Port      int    `mapstructure:"port"`
-	Mode      string `mapstructure:"mode"` // debug | release | test
-	StaticDir string `mapstructure:"static_dir"`
-	TmpDir    string `mapstructure:"tmp_dir"`
+	Host      string    `mapstructure:"host"`
+	Port      int       `mapstructure:"port"`
+	Mode      string    `mapstructure:"mode"` // debug | release | test
+	StaticDir string    `mapstructure:"static_dir"`
+	TmpDir    string    `mapstructure:"tmp_dir"`
+	TLS       TLSConfig `mapstructure:"tls"`
+}
+
+// TLSConfig 入站 HTTPS 配置（证书来自证书管理，DES-I-002）。
+type TLSConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	CertFile string `mapstructure:"cert_file"`
+	KeyFile  string `mapstructure:"key_file"`
 }
 
 // DatabaseConfig PostgreSQL 配置。
@@ -138,6 +146,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.mode", "release")
 	v.SetDefault("server.static_dir", "./web/dist")
 	v.SetDefault("server.tmp_dir", "./data/tmp")
+	v.SetDefault("server.tls.enabled", false)
+	v.SetDefault("server.tls.cert_file", "./data/tls/server.crt")
+	v.SetDefault("server.tls.key_file", "./data/tls/server.key")
 
 	v.SetDefault("database.host", "127.0.0.1")
 	v.SetDefault("database.port", 5432)
@@ -175,6 +186,9 @@ func bindEnv(v *viper.Viper) {
 	_ = v.BindEnv("server.mode", "AUTO_PERF_SERVER_MODE")
 	_ = v.BindEnv("server.static_dir", "AUTO_PERF_SERVER_STATIC_DIR")
 	_ = v.BindEnv("server.tmp_dir", "AUTO_PERF_SERVER_TMP_DIR")
+	_ = v.BindEnv("server.tls.enabled", "AUTO_PERF_SERVER_TLS_ENABLED")
+	_ = v.BindEnv("server.tls.cert_file", "AUTO_PERF_SERVER_TLS_CERT_FILE")
+	_ = v.BindEnv("server.tls.key_file", "AUTO_PERF_SERVER_TLS_KEY_FILE")
 
 	_ = v.BindEnv("database.host", "AUTO_PERF_DATABASE_HOST")
 	_ = v.BindEnv("database.port", "AUTO_PERF_DATABASE_PORT")
