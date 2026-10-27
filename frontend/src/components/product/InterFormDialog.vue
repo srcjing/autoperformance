@@ -285,16 +285,32 @@ function onSubmit(): void {
 .method-field {
   max-width: 140px;
 }
+.method-field select {
+  min-width: 0;
+}
 
+/* 地址行：协议/端口固定窄，路径自适应；空间不足自动换行，避免重叠。 */
+.address-row {
+  flex-wrap: wrap;
+}
 .scheme-field {
-  max-width: 120px;
+  flex: 0 0 108px;
+  max-width: 108px;
 }
-
 .port-field {
-  max-width: 160px;
+  flex: 0 0 128px;
+  max-width: 128px;
 }
-
 .path-field {
-  flex: 1;
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+/* 覆盖全局 .ap-field input/select 的 min-width:160px，避免挤出容器造成重叠。 */
+.scheme-field select,
+.port-field input,
+.path-field input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 </style>
