@@ -235,7 +235,7 @@ verify_package_integrity() {
   listed="$(printf '%s\n' "$expected" | sed 's/^[0-9a-f]\{64\}  //')"
   while IFS= read -r f; do
     [[ -z "$f" ]] && continue
-    if ! printf '%s\n' "$listed" | grep -Fxq -- "$f"; then
+    if ! grep -Fxq -- "$f" <<< "$listed"; then
       unlisted=$((unlisted + 1))
       mismatches+=("未登记文件: ${f}")
     fi

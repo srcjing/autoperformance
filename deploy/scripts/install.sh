@@ -136,7 +136,7 @@ detect_db_mode() {
   if [[ -n "$DB_MODE" ]]; then
     return 0
   fi
-  if [[ -x "${PKG_ROOT}/runtime/postgres/bin/initdb" ]]; then
+  if [[ -f "${PKG_ROOT}/runtime/postgres/bin/initdb" ]]; then
     DB_MODE="local"
   else
     DB_MODE="external"
@@ -148,7 +148,7 @@ check_runtime_deps() {
   local manifest="${PKG_ROOT}/manifest.yaml"
   local missing=()
 
-  if [[ ! -x "${PKG_ROOT}/bin/k6" ]]; then
+  if [[ ! -f "${PKG_ROOT}/bin/k6" ]]; then
     missing+=("bin/k6（压测引擎）")
     if [[ "$(manifest_dep_bundled "$manifest" k6)" == "true" ]]; then
       log_error "manifest 声明 k6 已随包，但 bin/k6 缺失 → 包不完整"
@@ -157,7 +157,7 @@ check_runtime_deps() {
   if [[ "$REQUIRE_PDF" == "1" && ! -d "${PKG_ROOT}/runtime/chromium" ]]; then
     missing+=("runtime/chromium（PDF 渲染）")
   fi
-  if [[ "$DB_MODE" == "local" && ! -x "${PKG_ROOT}/runtime/postgres/bin/initdb" ]]; then
+  if [[ "$DB_MODE" == "local" && ! -f "${PKG_ROOT}/runtime/postgres/bin/initdb" ]]; then
     missing+=("runtime/postgres/bin/initdb（本地 PostgreSQL）")
   fi
 
@@ -313,6 +313,8 @@ install_binaries() {
     rm -rf "${INSTALL_DIR}/runtime/postgres"
     cp -a "${PKG_ROOT}/runtime/postgres" "${INSTALL_DIR}/runtime/postgres"
     chmod -R a+rX "${INSTALL_DIR}/runtime/postgres"
+    # 跨平台构建机（如 Windows）打包会丢失可执行位，显式补齐 bin/ 下文件
+    find "${INSTALL_DIR}/runtime/postgres/bin" -maxdepth 1 -type f -exec chmod 0755 {} + 2>/dev/null || true
     log_info "已安装 PostgreSQL 运行时: ${INSTALL_DIR}/runtime/postgres"
   fi
 
@@ -445,7 +447,7 @@ ensure_kek() {
 # ---------------------------------------------------------------------------
 
 pg_local_psql() {
-  run_as "$SERVICE_USER" "${INSTALL_DIR}/runtime/postgres/bin/psql" \
+  run_as "$SERVICE_USER" env LD_LIBRARY_PATH="${INSTALL_DIR}/runtime/postgres/lib" "${INSTALL_DIR}/runtime/postgres/bin/psql" \
     -h "${DATA_DIR}/run" -p "$DB_PORT" -U "$SERVICE_USER" -v ON_ERROR_STOP=1 "$@"
 }
 
@@ -462,6 +464,7 @@ Before=auto_performance.service
 Type=simple
 User=${SERVICE_USER}
 Group=${SERVICE_GROUP}
+Environment=LD_LIBRARY_PATH=${INSTALL_DIR}/runtime/postgres/lib
 ExecStart=${INSTALL_DIR}/runtime/postgres/bin/postgres -D ${DATA_DIR}/postgres \
   -c listen_addresses=127.0.0.1 -c port=${DB_PORT} -c unix_socket_directories=${DATA_DIR}/run
 RuntimeDirectory=auto_performance
@@ -499,7 +502,7 @@ setup_database_local() {
   fi
 
   if [[ ! -s "${DATA_DIR}/postgres/PG_VERSION" ]]; then
-    run_as "$SERVICE_USER" "${pgb}/initdb" -D "${DATA_DIR}/postgres" -U "$SERVICE_USER" \
+    run_as "$SERVICE_USER" env LD_LIBRARY_PATH="${INSTALL_DIR}/runtime/postgres/lib" "${pgb}/initdb" -D "${DATA_DIR}/postgres" -U "$SERVICE_USER" \
       -E UTF8 --locale=C --auth-local=peer --auth-host=scram-sha-256 \
       || die "$EXIT_DB" "initdb 失败"
     log_info "initdb 完成（auth-local=peer, auth-host=scram-sha-256）"
@@ -516,10 +519,10 @@ setup_database_local() {
     systemctl restart "$PG_SERVICE_NAME" || die "$EXIT_SERVICE" "PostgreSQL 启动失败"
     local i
     for ((i = 0; i < 30; i++)); do
-      run_as "$SERVICE_USER" "${pgb}/pg_isready" -h "${DATA_DIR}/run" -p "$DB_PORT" >/dev/null 2>&1 && break
+      run_as "$SERVICE_USER" env LD_LIBRARY_PATH="${INSTALL_DIR}/runtime/postgres/lib" "${pgb}/pg_isready" -h "${DATA_DIR}/run" -p "$DB_PORT" >/dev/null 2>&1 && break
       sleep 1
     done
-    run_as "$SERVICE_USER" "${pgb}/pg_isready" -h "${DATA_DIR}/run" -p "$DB_PORT" \
+    run_as "$SERVICE_USER" env LD_LIBRARY_PATH="${INSTALL_DIR}/runtime/postgres/lib" "${pgb}/pg_isready" -h "${DATA_DIR}/run" -p "$DB_PORT" \
       || die "$EXIT_DB" "本地 PostgreSQL 未就绪"
     log_info "本地 PostgreSQL 已就绪（127.0.0.1:${DB_PORT}）"
   fi

@@ -218,7 +218,7 @@ stage_postgres() {
     return 1
   fi
 
-  if [[ ! -x "${src}/bin/initdb" || ! -x "${src}/bin/postgres" ]]; then
+  if [[ ! -f "${src}/bin/initdb" || ! -f "${src}/bin/postgres" ]]; then
     if [[ "$STRICT" == "1" ]]; then
       die "$EXIT_DEPS" "PostgreSQL 运行时缺少 bin/initdb 或 bin/postgres: $src"
     fi
@@ -365,7 +365,9 @@ runtime_dependencies:
 files:
 EOF
 
-    local f size mode hash
+    local f size mode hash filelist
+    filelist="$(mktemp)"
+    (cd "$PKG_DIR" && find . -type f | sed 's#^\./##' | sort) > "$filelist"
     while IFS= read -r f; do
       [[ -z "$f" ]] && continue
       # 路径含空格会破坏 manifest 的 “<hash>  <path>” 校验格式，构建期直接拒绝
@@ -384,7 +386,8 @@ EOF
     size: ${size}
     mode: "${mode}"
 EOF
-    done < <(cd "$PKG_DIR" && find . -type f | sed 's#^\./##' | sort)
+    done < "$filelist"
+    rm -f "$filelist"
   } >"${PKG_DIR}/manifest.yaml"
 
   (cd "$PKG_DIR" && sha256sum manifest.yaml >manifest.sha256)
@@ -392,6 +395,11 @@ EOF
 }
 
 verify_staged_package() {
+  # SKIP_PREVERIFY=1：跳过逐文件二次 SHA256（构建机较慢时使用；交付前请在目标机 install.sh --check-only 复核）
+  if [[ "${SKIP_PREVERIFY:-0}" == "1" ]]; then
+    log_warn "SKIP_PREVERIFY=1：跳过 5/6 打包前自校验（请在目标机 --check-only 复核）"
+    return 0
+  fi
   log_step "5/6 打包前自校验（逐文件 SHA256）"
   verify_package_integrity "$PKG_DIR" || die "$EXIT_INTEGRITY" "自校验失败：生成的包与清单不一致"
 }
