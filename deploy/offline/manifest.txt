@@ -1,32 +1,53 @@
-auto_performance 离线包清单（manifest）
-======================================
+auto_performance 离线包清单说明（人读版）
+==========================================
 
-版本:       0.1.0
-构建平台:   linux/amd64（可扩展 arm64）
-目标环境:   无外网、无预装运行时
+> 机器可读清单为包内 `manifest.yaml`（记录版本、运行时依赖、逐文件 SHA256），
+> 由 `deploy/offline/build-offline.sh` 自动生成，`install.sh` / `upgrade.sh` 部署前逐文件校验。
+> 本文件仅说明包内构成与依赖来源，供打包/交付评审使用。
 
-依赖版本（构建期 / 运行期）:
-  Go          1.26.5         （编译进二进制，运行期无需）
-  Node        v24.15.0       （仅构建期）
-  npm         11.14.1        （仅构建期）
-  PostgreSQL  16.x           （离线运行时，install.sh 初始化）
-  k6          v0.x           （压测引擎，随包分发 bin/k6）
-  Chromium    headless       （PDF 渲染，随包分发 runtime/chromium/）
+一、版本与平台
+--------------
+  版本      : 由 VERSION 环境变量决定（SemVer，例如 0.1.0）
+  目标平台  : TARGET_OS/TARGET_ARCH（默认 linux/amd64，可 linux/arm64）
+  构建期    : Go 1.26.x / Node 20+ / npm 10+（仅打包机需要，运行期不需要）
+  运行期    : 目标机无需 Go/Node；外部依赖仅 PostgreSQL + k6 + Chromium
 
-产物:
-  bin/auto_performance      后端单二进制（内嵌前端 + 报告模板）
-  bin/k6                    压测引擎二进制（后续随包）
-  runtime/chromium/         headless Chromium（后续随包）
-  runtime/postgres/         PostgreSQL 离线安装包/二进制（后续随包）
-  config/config.yaml        默认配置
-  scripts/install.sh        安装脚本
-  scripts/upgrade.sh        升级脚本（含数据迁移/回滚）
-  scripts/uninstall.sh      卸载脚本（--keep-data / --purge-data）
+二、包内结构
+------------
+  bin/auto_performance       后端单二进制（CGO_ENABLED=0 静态编译，内嵌前端 + 报告模板）
+  bin/k6                     压测引擎二进制（随包分发，install.sh 安装到 /opt/auto_performance/bin/k6）
+  runtime/chromium/          headless Chromium（PDF 渲染，install.sh 安装到 runtime/chromium）
+  runtime/postgres/          PostgreSQL 离线运行时（含 bin/initdb、bin/postgres、bin/psql）
+  config/config.example.yaml 配置样例（install.sh 渲染生产 config.yaml，含随机密钥与数据库口令）
+  scripts/install.sh         安装（完整性校验 → 低权限账号 → KEK → 数据库 → 迁移 → systemd）
+  scripts/upgrade.sh         升级（备份 → 停服 → 替换 → 迁移 → 健康检查 → 失败回滚）
+  scripts/uninstall.sh       卸载（默认保留数据；--purge-data 二次确认后物理清除）
+  scripts/lib/common.sh      脚本公共库（日志/退出码/清单校验/健康检查）
+  data/                      数据目录占位（生产数据在 /var/lib/auto_performance）
+  manifest.yaml              机器可读清单（版本 / 依赖 / SHA256）
+  manifest.sha256            manifest.yaml 自身的 SHA256（防清单被替换）
+  VERSION                    版本号
+  README.md                  部署说明
 
-校验:
-  auto_performance-offline-<version>.tar.gz.sha256
-    SHA256 校验和（build-offline.sh 自动生成，安装前先校验完整性）
+三、外部依赖获取方式（打包机）
+------------------------------
+默认从 `deploy/offline/assets/` 读取，也可用环境变量显式指定或（联网打包机）下载：
 
-说明:
-  - 后端依赖全部内嵌进单二进制（Go 静态编译 + go:embed 前端/模板）。
-  - k6 / Chromium / PostgreSQL 为外部依赖，随包分发并配置路径调用（见 architecture.md §6.3）。
+  依赖        本地放置（默认）                              环境变量覆盖
+  ----------  ------------------------------------------  ------------------
+  k6          assets/k6/k6-<os>-<arch> 或 assets/bin/k6     K6_BINARY
+  chromium    assets/chromium/（含 chrome 或 headless_shell）CHROMIUM_DIR
+  postgres    assets/postgres/（含 bin/initdb、bin/postgres）POSTGRES_DIR
+
+可选下载（仅打包机，离线环境保持 ALLOW_DOWNLOAD=0）：
+  ALLOW_DOWNLOAD=1 K6_DOWNLOAD_URL=... CHROMIUM_DOWNLOAD_URL=... POSTGRES_DOWNLOAD_URL=...
+
+发布构建必须加 `--strict`：任一依赖缺失即构建失败，避免产出功能残缺的“离线包”。
+CI/联调环境可不加 --strict（manifest 中 bundled=false，install.sh 需 --allow-missing-deps 才会放行）。
+
+四、校验与安全
+--------------
+  1. 生成包后立即自校验（build-offline.sh 内部调用 verify_package_integrity）。
+  2. 交付时校验整包：`sha256sum -c auto_performance-offline-<version>.tar.gz.sha256`。
+  3. 安装/升级前逐文件校验 manifest.yaml 记录：任一文件缺失/哈希不符/夹带未登记文件即中止。
+  4. 包内不含私钥与口令：KEK、JWT/审计密钥、数据库口令均在目标机安装时生成。

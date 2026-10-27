@@ -1,10 +1,10 @@
 <template>
   <div class="app-shell">
-    <!-- 侧边栏：6 大模块导航 -->
+    <!-- 侧边栏：按权限动态过滤的 6 大模块导航 -->
     <aside class="sidebar">
       <div class="logo">auto_performance</div>
       <nav class="nav">
-        <div v-for="group in navGroups" :key="group.title" class="nav-group">
+        <div v-for="group in visibleNavGroups" :key="group.title" class="nav-group">
           <div class="nav-group-title">{{ group.title }}</div>
           <RouterLink
             v-for="item in group.children"
@@ -16,6 +16,7 @@
             {{ item.label }}
           </RouterLink>
         </div>
+        <p v-if="visibleNavGroups.length === 0" class="nav-empty">暂无可访问的功能</p>
       </nav>
     </aside>
 
@@ -23,7 +24,11 @@
       <!-- 顶栏 -->
       <header class="header">
         <div class="breadcrumb">{{ currentTitle }}</div>
-        <div class="user">admin</div>
+        <div class="user">
+          <span class="user-name">{{ displayName }}</span>
+          <RouterLink class="header-action" to="/change-password">修改密码</RouterLink>
+          <button type="button" class="header-action logout" @click="onLogout">退出登录</button>
+        </div>
       </header>
 
       <!-- 内容区 -->
@@ -36,11 +41,15 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import type { PermissionLevel } from '@/utils/permission'
 
 interface NavItem {
   path: string
   label: string
+  module: string
+  permission?: PermissionLevel
 }
 
 interface NavGroup {
@@ -49,53 +58,71 @@ interface NavGroup {
 }
 
 // 侧边栏导航（对齐 frontend-structure.md §5：6 大模块）。
-// 骨架阶段未做权限过滤；正式实现按「子模块 read 权限」动态过滤，敏感子模块需 write。
+// 按「子模块 read 权限」动态过滤；敏感子模块（管理员/证书/SSH）需 write 授权才可见。
 const navGroups: NavGroup[] = [
   {
     title: '环境管理',
     children: [
-      { path: '/environments/list', label: '环境列表' },
-      { path: '/environments/tags', label: '标签维护' },
+      { path: '/environments/list', label: '环境列表', module: 'env.list' },
+      { path: '/environments/tags', label: '标签维护', module: 'env.tag' },
     ],
   },
   {
     title: '产品管理',
     children: [
-      { path: '/products/list', label: '产品列表' },
-      { path: '/products/1/interfaces', label: '接口管理' },
+      { path: '/products/list', label: '产品列表', module: 'product.list' },
+      { path: '/products/1/interfaces', label: '接口管理', module: 'product.interface' },
     ],
   },
   {
     title: '测试管理',
     children: [
-      { path: '/testing/templates', label: '预设模板' },
-      { path: '/testing/tasks', label: '测试任务' },
+      { path: '/testing/templates', label: '预设模板', module: 'testing.template' },
+      { path: '/testing/tasks', label: '测试任务', module: 'testing.task' },
     ],
   },
   {
     title: '报告管理',
-    children: [{ path: '/reports/list', label: '报告列表' }],
+    children: [{ path: '/reports/list', label: '报告列表', module: 'report.list' }],
   },
   {
     title: '日志管理',
     children: [
-      { path: '/logs/user', label: '用户日志' },
-      { path: '/logs/system', label: '系统日志' },
-      { path: '/logs/test', label: '测试日志' },
+      { path: '/logs/user', label: '用户日志', module: 'log.user' },
+      { path: '/logs/system', label: '系统日志', module: 'log.system' },
+      { path: '/logs/test', label: '测试日志', module: 'log.test' },
     ],
   },
   {
     title: '系统设置',
     children: [
-      { path: '/settings/admins', label: '管理员' },
-      { path: '/settings/certificates', label: '证书' },
-      { path: '/settings/ssh-hosts', label: 'SSH/Host' },
+      { path: '/settings/admins', label: '管理员', module: 'setting.admin', permission: 'write' },
+      { path: '/settings/certificates', label: '证书', module: 'setting.cert', permission: 'write' },
+      { path: '/settings/ssh-hosts', label: 'SSH/Host', module: 'setting.ssh', permission: 'write' },
     ],
   },
 ]
 
 const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
+
+const visibleNavGroups = computed<NavGroup[]>(() =>
+  navGroups
+    .map((group) => ({
+      ...group,
+      children: group.children.filter((item) => auth.hasPerm(item.module, item.permission ?? 'read')),
+    }))
+    .filter((group) => group.children.length > 0),
+)
+
 const currentTitle = computed(() => (route.meta.title as string) || '')
+const displayName = computed(() => auth.user?.name || auth.user?.username || '未登录')
+
+async function onLogout(): Promise<void> {
+  await auth.signOut()
+  await router.replace({ name: 'login' })
+}
 </script>
 
 <style scoped>
@@ -153,6 +180,12 @@ const currentTitle = computed(() => (route.meta.title as string) || '')
   color: #fff;
 }
 
+.nav-empty {
+  padding: 16px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
 .main {
   flex: 1;
   display: flex;
@@ -177,8 +210,28 @@ const currentTitle = computed(() => (route.meta.title as string) || '')
 }
 
 .user {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   font-size: 14px;
   color: #6b7280;
+}
+
+.user-name {
+  color: #374151;
+}
+
+.header-action {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 14px;
+  color: var(--ap-primary);
+  cursor: pointer;
+}
+
+.logout {
+  color: #b91c1c;
 }
 
 .content {

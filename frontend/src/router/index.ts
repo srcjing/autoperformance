@@ -17,6 +17,18 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
+    path: '/change-password',
+    component: () => import('@/layouts/AuthLayout.vue'),
+    children: [
+      {
+        path: '',
+        name: 'change-password',
+        component: () => import('@/views/auth/ChangePasswordView.vue'),
+        meta: { title: '修改密码', requiresAuth: true },
+      },
+    ],
+  },
+  {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
     redirect: '/environments/list',
@@ -43,6 +55,8 @@ const routes: RouteRecordRaw[] = [
       { path: 'settings/admins', name: 'admin-manage', component: () => import('@/views/setting/AdminManageView.vue'), meta: { title: '管理员管理', module: 'setting.admin', permission: 'write' } },
       { path: 'settings/certificates', name: 'certificate-manage', component: () => import('@/views/setting/CertificateManageView.vue'), meta: { title: '证书管理', module: 'setting.cert', permission: 'write' } },
       { path: 'settings/ssh-hosts', name: 'ssh-host-manage', component: () => import('@/views/setting/SshHostManageView.vue'), meta: { title: 'SSH 与 Host 管理', module: 'setting.ssh', permission: 'write' } },
+      // 无权限
+      { path: '403', name: 'forbidden', component: () => import('@/views/error/ForbiddenView.vue'), meta: { title: '无权限' } },
     ],
   },
   {
@@ -58,13 +72,60 @@ const router = createRouter({
   routes,
 })
 
-// 导航守卫（对齐 frontend-structure.md §6）。
-// 骨架：仅校验登录态；权限守卫（meta.module/permission → hasPerm）后续按实现计划完善。
-router.beforeEach((to) => {
+/**
+ * 导航守卫（对齐 frontend-structure.md §6 与 api-contract §1.4）：
+ *   1. 未登录 → /login（携带 redirect）；
+ *   2. 已登录但权限未加载 → GET /auth/me 加载（失败则清理会话回登录）；
+ *   3. must_change_password=true → 强制停留改密页（除改密外全部重定向）；
+ *   4. meta.module/meta.permission（默认 read）→ hasPerm 校验，不满足跳 403。
+ *
+ * 权限仅驱动前端显隐/路由跳转，最终鉴权在服务端（INV-1）。
+ */
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
-  if (!to.meta.public && !auth.isAuthenticated) {
+
+  if (to.meta.public) {
+    if (to.name === 'login' && auth.isAuthenticated) {
+      // 已有 token 时先加载权限集合，再决定默认落地页（刷新场景）。
+      if (!auth.profileLoaded) {
+        try {
+          await auth.loadProfile()
+        } catch {
+          auth.clearSession()
+          return true
+        }
+      }
+      const redirect = typeof to.query.redirect === 'string' ? to.query.redirect : auth.homePath
+      return redirect
+    }
+    return true
+  }
+
+  if (!auth.isAuthenticated) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
+
+  if (!auth.profileLoaded) {
+    try {
+      await auth.loadProfile()
+    } catch {
+      auth.clearSession()
+      return { name: 'login', query: { redirect: to.fullPath } }
+    }
+  }
+
+  if (auth.mustChangePassword && to.name !== 'change-password') {
+    return { name: 'change-password' }
+  }
+
+  const module = to.meta.module
+  if (module) {
+    const permission = to.meta.permission ?? 'read'
+    if (!auth.hasPerm(module, permission)) {
+      return { name: 'forbidden' }
+    }
+  }
+
   return true
 })
 

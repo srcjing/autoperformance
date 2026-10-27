@@ -14,9 +14,11 @@ export default defineConfig({
     port: 5173,
     // 联调：将 /api 代理到后端（分离部署形态）；内嵌部署下由后端直接服务静态产物。
     proxy: {
+      // ws: true 用于把 /api/v1/ws 的 WebSocket 升级请求一并转发到后端（实时日志/指标联调）。
       '/api': {
         target: 'http://127.0.0.1:8080',
         changeOrigin: true,
+        ws: true,
       },
     },
   },

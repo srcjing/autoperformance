@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+<title>{{.Title}}</title>
+<style>
+  :root {
+    --pass: #047857;
+    --pass-bg: #ecfdf5;
+    --fail: #b91c1c;
+    --fail-bg: #fef2f2;
+    --warn: #b45309;
+    --warn-bg: #fffbeb;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --text: #1f2933;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 28px 32px 40px;
+    background: #f5f6f8;
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 20px 22px;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+  h1 { margin: 0 0 6px; font-size: 20px; }
+  h2 { margin: 0 0 10px; font-size: 15px; }
+  .sub { color: var(--muted); font-size: 12px; }
+  .meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 6px 18px;
+    margin-top: 14px;
+    font-size: 12px;
+  }
+  .meta div span { color: var(--muted); margin-right: 6px; }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 12px;
+    margin: 16px 0;
+  }
+  .card {
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+  .card .label { color: var(--muted); font-size: 12px; }
+  .card .value { font-size: 20px; font-weight: 600; margin-top: 2px; }
+  .card .hint { color: var(--muted); font-size: 11px; }
+  section {
+    margin-top: 16px;
+    padding: 18px 20px;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: #f9fafb; color: #4b5563; font-weight: 600; white-space: nowrap; }
+  tbody tr:hover { background: #fafafa; }
+  .badge {
+    display: inline-block;
+    padding: 1px 9px;
+    border-radius: 10px;
+    font-size: 11px;
+    line-height: 18px;
+    white-space: nowrap;
+  }
+  .badge-pass { background: var(--pass-bg); color: var(--pass); }
+  .badge-fail { background: var(--fail-bg); color: var(--fail); }
+  .badge-warn { background: var(--warn-bg); color: var(--warn); }
+  .badge-muted { background: #f3f4f6; color: var(--muted); }
+  .state-pass { color: var(--pass); }
+  .state-fail { color: var(--fail); }
+  .state-warn { color: var(--warn); }
+  .state-muted { color: var(--muted); }
+  tr.row-fail { background: var(--fail-bg); }
+  tr.row-fail:hover { background: #fde8e8; }
+  tr.row-pass { background: #fff; }
+  .url { word-break: break-all; color: #4b5563; }
+  .reason { color: var(--fail); font-size: 11px; }
+  .empty { color: #9ca3af; text-align: center; padding: 22px 0; }
+  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+  .toolbar label { color: var(--muted); font-size: 12px; }
+  footer { margin-top: 18px; color: var(--muted); font-size: 11px; text-align: center; }
+  body.only-failed tr.row-pass,
+  body.only-failed tr.item-pass { display: none; }
+  @media print {
+    body { background: #fff; padding: 0; }
+    section, header, .card { box-shadow: none; border: 1px solid var(--border); }
+    .toolbar { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>{{.Title}}</h1>
+      <div class="sub">{{.SourceLabel}} · 报告编号 #{{.ReportID}}</div>
+    </div>
+    <div class="badge {{.StateBadgeClass}}">
+      <span class="{{.StateClass}}">{{.StateLabel}}</span>
+    </div>
+    <div class="meta">
+      <div><span>任务</span>{{if .TaskName}}{{.TaskName}}{{else}}-{{end}}</div>
+      <div><span>环境</span>{{.Environment}}</div>
+      <div><span>生成时间</span>{{.GeneratedAtText}}</div>
+      <div><span>执行用时</span>{{.DurationText}}</div>
+      <div><span>关联任务 ID</span>{{if .TaskID}}{{.TaskID}}{{else}}无（外部导入）{{end}}</div>
+      <div><span>报告格式</span>HTML</div>
+    </div>
+  </header>
+
+  <div class="cards">
+    <div class="card">
+      <div class="label">接口达标率</div>
+      <div class="value">{{.PassRateText}}%</div>
+      <div class="hint">{{.Summary.PassedInterfaces}} / {{.Summary.TotalInterfaces}} 个接口达标</div>
+    </div>
+    <div class="card">
+      <div class="label">达标接口</div>
+      <div class="value state-pass">{{.Summary.PassedInterfaces}}</div>
+      <div class="hint">全部启用阈值均满足</div>
+    </div>
+    <div class="card">
+      <div class="label">不达标接口</div>
+      <div class="value state-fail">{{.Summary.FailedInterfaces}}</div>
+      <div class="hint">存在未达标/数据缺失/非法阈值</div>
+    </div>
+    <div class="card">
+      <div class="label">阈值项（达标 / 不达标）</div>
+      <div class="value">{{.Summary.PassedThresholds}} / {{.Summary.FailedThresholds}}</div>
+      <div class="hint">共 {{.Summary.TotalThresholds}} 条启用阈值</div>
+    </div>
+  </div>
+
+  <section>
+    <h2>关键指标</h2>
+    {{if .HasMetrics}}
+    <table>
+      <thead>
+        <tr><th>指标</th><th>实测值</th><th>单位</th></tr>
+      </thead>
+      <tbody>
+        {{range .Metrics}}
+        <tr>
+          <td>{{.Label}}</td>
+          <td>{{.Value}}</td>
+          <td>{{.Unit}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">本次执行未采集到指标数据</p>
+    {{end}}
+  </section>
+
+  <section>
+    <h2>接口达标明细</h2>
+    {{if .HasInterfaces}}
+    <table>
+      <thead>
+        <tr><th>接口</th><th>方法</th><th>地址（已脱敏）</th><th>阈值项</th><th>结论</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        {{range .Interfaces}}
+        <tr class="{{if .Pass}}row-pass{{else}}row-fail{{end}}">
+          <td>{{.Name}}</td>
+          <td>{{.Method}}</td>
+          <td class="url">{{.URL}}</td>
+          <td>{{.Total}}</td>
+          <td>
+            <span class="badge {{if .Pass}}badge-pass{{else}}badge-fail{{end}}">
+              {{if .Pass}}达标{{else}}不达标{{end}}
+            </span>
+          </td>
+          <td>{{if .Reason}}<span class="reason">{{.Reason}}</span>{{else}}-{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">未配置启用阈值，本报告不计入达标率统计</p>
+    {{end}}
+  </section>
+
+  <section>
+    <div class="toolbar">
+      <h2 style="margin:0">阈值快照判定</h2>
+      <label><input type="checkbox" id="only-failed"> 仅看未达标项</label>
+    </div>
+    {{if .HasThresholds}}
+    <table>
+      <thead>
+        <tr><th>接口</th><th>指标</th><th>条件</th><th>阈值</th><th>实测</th><th>结论</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        {{range .Summary.Items}}
+        <tr class="{{if .Pass}}row-pass item-pass{{else}}row-fail{{end}}">
+          <td>{{.InterfaceName}}</td>
+          <td>{{.Metric}}</td>
+          <td>{{.Operator}}</td>
+          <td>{{num .Threshold}}</td>
+          <td>{{if .HasActual}}{{num .Actual}}{{else}}-{{end}}</td>
+          <td>
+            <span class="badge {{if .Pass}}badge-pass{{else}}badge-fail{{end}}">
+              {{if .Pass}}达标{{else}}不达标{{end}}
+            </span>
+          </td>
+          <td>{{if .Reason}}<span class="reason">{{.Reason}}</span>{{else}}-{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">无阈值判定记录</p>
+    {{end}}
+  </section>
+
+  <footer>{{.Footnote}}</footer>
+</div>
+<script>
+  (function () {
+    var box = document.getElementById('only-failed');
+    if (!box) return;
+    box.addEventListener('change', function () {
+      document.body.classList.toggle('only-failed', box.checked);
+    });
+  })();
+</script>
+</body>
+</html>
