@@ -17,7 +17,8 @@ const (
 	productColumns = `p.id, p.name, p.code, COALESCE(p.product_version, ''), COALESCE(p.platform, ''),
 		COALESCE(p.description, ''), p.status, p.version, p.created_at, p.updated_at`
 
-	interfaceColumns = `i.id, i.product_id, i.name, COALESCE(i.method, ''), COALESCE(i.url, ''),
+	interfaceColumns = `i.id, i.product_id, i.name, COALESCE(i.method, ''),
+		COALESCE(i.scheme, 'http'), COALESCE(i.port, 80), COALESCE(i.path, '/'),
 		COALESCE(i.headers, '{}'::jsonb), COALESCE(i.headers_enc, ''::bytea), COALESCE(i.body::text, ''),
 		COALESCE(i.timeouts, '{}'::jsonb), COALESCE(i.description, ''), i.status, i.version,
 		i.created_at, i.updated_at`
@@ -47,7 +48,8 @@ func scanInterface(row pgx.Row) (*domain.Interface, error) {
 	var api domain.Interface
 	var headers, timeouts []byte
 	err := row.Scan(
-		&api.ID, &api.ProductID, &api.Name, &api.Method, &api.URL, &headers, &api.HeadersEnc,
+		&api.ID, &api.ProductID, &api.Name, &api.Method,
+		&api.Scheme, &api.Port, &api.Path, &headers, &api.HeadersEnc,
 		&api.Body, &timeouts, &api.Description, &api.Status, &api.Version,
 		&api.CreatedAt, &api.UpdatedAt,
 	)
@@ -256,7 +258,7 @@ func (r *PGRepository) CountInterfacesByProduct(ctx context.Context, productID i
 const interfaceFilterClause = `
 	WHERE i.deleted_at IS NULL
 	  AND i.product_id = $1
-	  AND ($2 = '' OR i.name ILIKE $2 OR i.url ILIKE $2)
+ 	  AND ($2 = '' OR i.name ILIKE $2 OR i.path ILIKE $2)
 	  AND ($3 = '' OR i.status = $3)`
 
 // ListInterfaces 产品下接口列表（关键字/状态 + 分页）。
@@ -319,15 +321,17 @@ func (r *PGRepository) CreateInterface(ctx context.Context, api *domain.Interfac
 		return err
 	}
 	const q = `
-		INSERT INTO interface (product_id, name, method, url, headers, headers_enc, body, timeouts,
-		                       description, status, enabled)
-		VALUES ($1, $2, $3, $4, $5::jsonb, $6, CASE WHEN $7 = '' THEN NULL ELSE $7::jsonb END,
-		        $8::jsonb, $9, $10, $11)
+		INSERT INTO interface (product_id, name, method, scheme, port, path, headers, headers_enc, body,
+		                       timeouts, description, status, enabled)
+		VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, CASE WHEN $9 = '' THEN NULL ELSE $9::jsonb END,
+		        $10::jsonb, $11, $12, $13)
 		RETURNING id, version, created_at, updated_at`
-	// enabled 为历史兼容列，与 status 保持同步（唯一事实源为 status）。
+	// enabled 为历史兼容列，与 status 保持同步（唯一事实源为 status）；
+	// url 为迁移前遗留列，新数据只写 scheme/port/path（不写 url）。
 	err = r.pool.QueryRow(ctx, q,
-		api.ProductID, api.Name, api.Method, api.URL, headers, api.HeadersEnc, api.Body,
-		timeouts, api.Description, api.Status, api.Status == domain.InterfaceStatusEnabled,
+		api.ProductID, api.Name, api.Method, api.Scheme, api.Port, api.Path,
+		headers, api.HeadersEnc, api.Body, timeouts, api.Description, api.Status,
+		api.Status == domain.InterfaceStatusEnabled,
 	).Scan(&api.ID, &api.Version, &api.CreatedAt, &api.UpdatedAt)
 	if err != nil {
 		if isForeignKeyViolation(err) {
@@ -350,13 +354,13 @@ func (r *PGRepository) UpdateInterface(ctx context.Context, api *domain.Interfac
 	}
 	const q = `
 		UPDATE interface
-		SET name = $3, method = $4, url = $5, headers = $6::jsonb, headers_enc = $7,
-		    body = CASE WHEN $8 = '' THEN NULL ELSE $8::jsonb END, timeouts = $9::jsonb,
-		    description = $10, version = version + 1, updated_at = now()
+		SET name = $3, method = $4, scheme = $5, port = $6, path = $7, headers = $8::jsonb,
+		    headers_enc = $9, body = CASE WHEN $10 = '' THEN NULL ELSE $10::jsonb END,
+		    timeouts = $11::jsonb, description = $12, version = version + 1, updated_at = now()
 		WHERE id = $1 AND version = $2 AND deleted_at IS NULL`
 	tag, err := r.pool.Exec(ctx, q,
-		api.ID, version, api.Name, api.Method, api.URL, headers, api.HeadersEnc, api.Body,
-		timeouts, api.Description,
+		api.ID, version, api.Name, api.Method, api.Scheme, api.Port, api.Path,
+		headers, api.HeadersEnc, api.Body, timeouts, api.Description,
 	)
 	if err != nil {
 		return fmt.Errorf("修改接口失败: %w", err)

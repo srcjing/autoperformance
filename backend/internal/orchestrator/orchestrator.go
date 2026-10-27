@@ -337,7 +337,12 @@ func (o *Orchestrator) buildScript(task *domain.TestTask) (string, error) {
 		}
 		interfaces = append(interfaces, snap)
 	}
-	return k6.BuildScript(k6.ScriptSpec{Flow: *flow, Interfaces: interfaces, MaxVUs: o.maxVUs})
+	return k6.BuildScript(k6.ScriptSpec{
+		Flow:       *flow,
+		Interfaces: interfaces,
+		MaxVUs:     o.maxVUs,
+		TargetHost: task.TargetHost,
+	})
 }
 
 // targetVUs 解析目标并发（concurrency 指标口径）。

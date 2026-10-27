@@ -159,7 +159,7 @@ func (f *fakeRepo) ListInterfaces(_ context.Context, q domain.InterfaceQuery) ([
 		if api.ProductID != q.ProductID {
 			continue
 		}
-		if q.Keyword != "" && !strings.Contains(api.Name, q.Keyword) && !strings.Contains(api.URL, q.Keyword) {
+		if q.Keyword != "" && !strings.Contains(api.Name, q.Keyword) && !strings.Contains(api.Path, q.Keyword) {
 			continue
 		}
 		if q.Status != "" && api.Status != q.Status {
@@ -207,7 +207,8 @@ func (f *fakeRepo) UpdateInterface(_ context.Context, api *domain.Interface, ver
 		return errcode.ErrConcurrent
 	}
 	f.updateCalls++
-	cur.Name, cur.Method, cur.URL = api.Name, api.Method, api.URL
+	cur.Name, cur.Method = api.Name, api.Method
+	cur.Scheme, cur.Port, cur.Path = api.Scheme, api.Port, api.Path
 	cur.Headers, cur.HeadersEnc = copyHeaders(api.Headers), append([]byte(nil), api.HeadersEnc...)
 	cur.Body, cur.Timeouts, cur.Description = api.Body, api.Timeouts, api.Description
 	cur.Version++
@@ -287,7 +288,8 @@ func addProduct(repo *fakeRepo, id int64, name, code string, status string) *dom
 func addInterface(repo *fakeRepo, id, productID int64, name string, status string, enc []byte) *domain.Interface {
 	api := &domain.Interface{
 		ID: id, ProductID: productID, Name: name, Method: domain.MethodGet,
-		URL: "https://api.example.com/health", Headers: map[string]string{"Accept": "*/*"},
+		Scheme: domain.SchemeHTTPS, Port: 443, Path: "/health",
+		Headers:    map[string]string{"Accept": "*/*"},
 		HeadersEnc: enc, Status: status, Version: 1,
 	}
 	repo.interfaces[id] = api

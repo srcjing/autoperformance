@@ -62,7 +62,7 @@
             />
             <span class="ap-badge">{{ item.method }}</span>
             <span class="interface-name">{{ item.name }}</span>
-            <span class="interface-url">{{ item.url }}</span>
+            <span class="interface-url">{{ formatInterfaceAddress(item) }}</span>
           </label>
           <p
             v-if="filteredInterfaces(product.id).length === 0 && interfacesOf(product.id).length > 0"
@@ -94,6 +94,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { listInterfaces, listProducts } from '@/api/product'
 import { useAuthStore } from '@/stores/auth'
 import type { InterfaceInfo, ProductInfo } from '@/types'
+import { formatInterfaceAddress } from '@/utils/format'
 
 // 接口范围选择器（PRD §3.2「按产品/按接口勾选」，api-contract §2.4 interface_ids）。
 //   - 接口范围可跨产品；按产品展开后逐接口勾选，或按产品全选/清空；
@@ -156,7 +157,7 @@ const filteredProducts = computed(() => {
     }
     return (interfacesByProduct.value[product.id] ?? []).some(
       (item) =>
-        item.name.toLowerCase().includes(text) || item.url.toLowerCase().includes(text),
+        item.name.toLowerCase().includes(text) || item.path.toLowerCase().includes(text),
     )
   })
 })
@@ -181,7 +182,7 @@ function filteredInterfaces(productId: string): InterfaceInfo[] {
   return list.filter(
     (item) =>
       item.name.toLowerCase().includes(text) ||
-      item.url.toLowerCase().includes(text) ||
+      item.path.toLowerCase().includes(text) ||
       item.method.toLowerCase().includes(text),
   )
 }

@@ -15,6 +15,7 @@ import (
 // 用于验证五要素校验、环境互斥、快照固化、状态流转与重试/清理入口约束。
 type fakeTaskRepo struct {
 	envStatus string
+	envHosts  []string
 	envErr    error
 
 	tasks     map[int64]*domain.TestTask
@@ -129,7 +130,11 @@ func (f *fakeTaskRepo) LockEnvironment(_ context.Context, _ repository.Tx, envID
 	if f.envErr != nil {
 		return nil, f.envErr
 	}
-	return &domain.Environment{ID: envID, Name: "测试环境", Status: f.envStatus}, nil
+	hosts := f.envHosts
+	if hosts == nil {
+		hosts = []string{"10.20.30.40", "Env-Internal.example.com"}
+	}
+	return &domain.Environment{ID: envID, Name: "测试环境", Status: f.envStatus, Hosts: hosts}, nil
 }
 
 func (f *fakeTaskRepo) MarkEnvironmentTesting(_ context.Context, _ repository.Tx, _ int64) error {
@@ -160,7 +165,9 @@ func (f *fakeTaskRepo) SnapshotInterfaces(_ context.Context, _ repository.Tx, id
 			ProductName: "网关服务",
 			Name:        "查询订单",
 			Method:      "GET",
-			URL:         "https://api.example.test/orders",
+			Scheme:      domain.SchemeHTTPS,
+			Port:        8443,
+			Path:        "/orders",
 			Status:      domain.InterfaceStatusEnabled,
 			CapturedAt:  time.Now(),
 		})

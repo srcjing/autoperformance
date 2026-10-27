@@ -71,7 +71,7 @@ const navGroups: NavGroup[] = [
     title: '产品管理',
     children: [
       { path: '/products/list', label: '产品列表', module: 'product.list' },
-      { path: '/products/1/interfaces', label: '接口管理', module: 'product.interface' },
+      { path: '/products/interfaces', label: '接口管理', module: 'product.interface' },
     ],
   },
   {

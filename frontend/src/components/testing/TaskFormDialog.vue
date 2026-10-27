@@ -36,12 +36,31 @@
         <p v-if="templateHint" class="ap-alert ap-alert-hint">{{ templateHint }}</p>
 
         <section class="cfg-section">
-          <h3 class="cfg-title">1. 被测环境 *</h3>
+          <h3 class="cfg-title">1. 被测环境与目标 Host *</h3>
           <EnvPicker
             v-model="environmentId"
             label="环境（测试中/已下线环境不可选）"
             :disabled="saving"
           />
+          <label class="ap-field">
+            <span class="ap-field-label">压测目标 Host *（取自所选环境 hosts）</span>
+            <select
+              v-model="targetHost"
+              :disabled="saving || !environmentId || hostLoading || envHosts.length === 0"
+            >
+              <option value="">请选择目标 Host</option>
+              <option v-for="host in envHosts" :key="host" :value="host">{{ host }}</option>
+            </select>
+            <span v-if="!environmentId" class="ap-muted">请先选择环境</span>
+            <span v-else-if="hostLoading" class="ap-muted">加载环境主机…</span>
+            <span v-else-if="hostError" class="ap-alert ap-alert-error">{{ hostError }}</span>
+            <span v-else-if="envHosts.length === 0" class="ap-muted">
+              该环境未配置 hosts，请先在环境管理中维护主机列表
+            </span>
+            <span v-else class="ap-muted">
+              接口不配置 host：执行期按 协议://目标Host:端口 + 路径 发送请求
+            </span>
+          </label>
         </section>
 
         <section class="cfg-section">
@@ -93,6 +112,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { getEnvironment } from '@/api/environment'
 import CleanConfig from './CleanConfig.vue'
 import EnvPicker from './EnvPicker.vue'
 import FlowConfig from './FlowConfig.vue'
@@ -138,6 +158,10 @@ const emit = defineEmits<{
 const name = ref('')
 const templateId = ref('')
 const environmentId = ref('')
+const targetHost = ref('')
+const envHosts = ref<string[]>([])
+const hostLoading = ref(false)
+const hostError = ref('')
 const interfaceIds = ref<string[]>([])
 const productIds = ref<string[]>([])
 const flow = ref<FlowConfigModel>(createDefaultFlow())
@@ -165,10 +189,44 @@ watch(
   },
 )
 
+// 环境切换 → 重新拉取该环境 hosts（目标主机由用户从该环境 hosts 中显式选择）。
+watch(environmentId, () => {
+  void loadHosts()
+})
+
+async function loadHosts(): Promise<void> {
+  const envId = environmentId.value
+  envHosts.value = []
+  hostError.value = ''
+  if (!envId) {
+    targetHost.value = ''
+    return
+  }
+  hostLoading.value = true
+  try {
+    const env = await getEnvironment(envId)
+    // 快速切换环境时丢弃过期响应。
+    if (environmentId.value !== envId) return
+    envHosts.value = env?.hosts ?? []
+  } catch {
+    if (environmentId.value !== envId) return
+    hostError.value = '加载环境主机失败，请重试或联系管理员'
+  } finally {
+    if (environmentId.value === envId) hostLoading.value = false
+  }
+  // 不自动选首个主机：多主机环境必须由用户显式选定（需求 1“任选一个”）。
+  if (!envHosts.value.includes(targetHost.value)) {
+    targetHost.value = ''
+  }
+}
+
 function reset(): void {
   name.value = ''
   templateId.value = props.initialTemplateId ?? ''
   environmentId.value = ''
+  targetHost.value = ''
+  envHosts.value = []
+  hostError.value = ''
   interfaceIds.value = []
   productIds.value = []
   flow.value = createDefaultFlow()
@@ -178,6 +236,8 @@ function reset(): void {
   formError.value = ''
   templateHint.value = ''
   if (templateId.value) applyTemplate(templateId.value)
+  // 关键路径显式加载一次（不依赖 watcher 注册时机）；重复请求幂等。
+  void loadHosts()
 }
 
 /** 用模板参数预填表单（参数可覆盖，不影响原模板）。 */
@@ -216,6 +276,10 @@ function onSubmit(): void {
     formError.value = '请选择被测环境'
     return
   }
+  if (!targetHost.value) {
+    formError.value = '请选择压测目标 Host（取自所选环境的 hosts）'
+    return
+  }
   if (interfaceIds.value.length === 0) {
     formError.value = '请至少选择一个接口（后端校验码 23003）'
     return
@@ -239,6 +303,7 @@ function onSubmit(): void {
   const payload: CreateTaskPayload = {
     name: name.value.trim(),
     environment_id: environmentId.value,
+    target_host: targetHost.value,
     interface_ids: interfaceIds.value,
     flow: toFlowPayload(flow.value),
     report_config: { formats: [...reportConfig.value.formats] },

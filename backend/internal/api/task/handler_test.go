@@ -75,16 +75,20 @@ func newTaskRouter(svc Service) *gin.Engine {
 func TestTaskDTOHidesAuthHeadersCiphertext(t *testing.T) {
 	now := time.Now()
 	svc := &stubService{task: &testsvc.TaskView{
-		ID:     9,
-		Name:   "任务",
-		EnvID:  3,
-		Status: domain.TaskRunning,
+		ID:         9,
+		Name:       "任务",
+		EnvID:      3,
+		TargetHost: "10.20.30.40",
+		Status:     domain.TaskRunning,
 		InterfaceSnapshots: []domain.InterfaceSnapshot{{
 			InterfaceID:    11,
 			ProductID:      4,
 			Name:           "查询订单",
 			Method:         "GET",
-			URL:            "https://api.example.test/orders",
+			Scheme:         domain.SchemeHTTPS,
+			Port:           8443,
+			Path:           "/orders",
+			URL:            "https://10.20.30.40:8443/orders",
 			Headers:        map[string]string{"X-Trace-Id": "abc"},
 			AuthHeadersEnc: []byte("super-cipher-text"),
 			Status:         domain.InterfaceStatusEnabled,
@@ -109,10 +113,15 @@ func TestTaskDTOHidesAuthHeadersCiphertext(t *testing.T) {
 	}
 	var resp struct {
 		Data struct {
-			ID       string `json:"id"`
-			Status   string `json:"status"`
-			Snapshot []struct {
+			ID         string `json:"id"`
+			Status     string `json:"status"`
+			TargetHost string `json:"target_host"`
+			Snapshot   []struct {
 				InterfaceID string `json:"interface_id"`
+				Scheme      string `json:"scheme"`
+				Port        int    `json:"port"`
+				Path        string `json:"path"`
+				URL         string `json:"url"`
 			} `json:"interface_range_snapshot"`
 			Thresholds []struct {
 				InterfaceID string  `json:"interface_id"`
@@ -123,11 +132,18 @@ func TestTaskDTOHidesAuthHeadersCiphertext(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("解析响应失败: %v", err)
 	}
-	if resp.Data.ID != "9" || resp.Data.Status != "running" {
+	if resp.Data.ID != "9" || resp.Data.Status != "running" || resp.Data.TargetHost != "10.20.30.40" {
 		t.Fatalf("任务响应异常: %+v", resp.Data)
 	}
 	if len(resp.Data.Snapshot) != 1 || resp.Data.Snapshot[0].InterfaceID != "11" {
 		t.Fatalf("快照 ID 应字符串化: %+v", resp.Data.Snapshot)
+	}
+	snap := resp.Data.Snapshot[0]
+	if snap.Scheme != "https" || snap.Port != 8443 || snap.Path != "/orders" {
+		t.Fatalf("快照应回传 scheme/port/path: %+v", snap)
+	}
+	if snap.URL != "https://10.20.30.40:8443/orders" {
+		t.Fatalf("快照 url 应为完整压测地址: %q", snap.URL)
 	}
 	if len(resp.Data.Thresholds) != 1 || resp.Data.Thresholds[0].Value != 500 {
 		t.Fatalf("阈值快照异常: %+v", resp.Data.Thresholds)
@@ -142,6 +158,7 @@ func TestCreateTaskBindsIDsAndOperator(t *testing.T) {
 	body := `{
 		"name":"峰值压测",
 		"environment_id":"3",
+		"target_host":"10.20.30.40",
 		"interface_ids":["11",12],
 		"product_ids":[4],
 		"flow":{"concurrency_mode":"fixed","target_vus":100,"duration":"60s"},
@@ -159,8 +176,8 @@ func TestCreateTaskBindsIDsAndOperator(t *testing.T) {
 	if svc.created == nil {
 		t.Fatal("服务未被调用")
 	}
-	if svc.created.EnvID != 3 || svc.created.CreatedBy != 7 {
-		t.Fatalf("环境/操作人解析异常: %+v", svc.created)
+	if svc.created.EnvID != 3 || svc.created.CreatedBy != 7 || svc.created.TargetHost != "10.20.30.40" {
+		t.Fatalf("环境/目标主机/操作人解析异常: %+v", svc.created)
 	}
 	if len(svc.created.InterfaceIDs) != 2 || svc.created.InterfaceIDs[1] != 12 {
 		t.Fatalf("接口范围解析异常: %+v", svc.created.InterfaceIDs)

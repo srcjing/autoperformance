@@ -27,6 +27,9 @@ type ScriptSpec struct {
 	Interfaces []domain.InterfaceSnapshot
 	// MaxVUs 并发数上限（配置项 k6.max_vus）。
 	MaxVUs int
+	// TargetHost 压测目标主机（任务的 target_host，来自所选环境 hosts；
+	// 接口不再配置 host）。
+	TargetHost string
 }
 
 // scriptRequest 模板中的单个请求（已通过白名单校验）。
@@ -99,7 +102,8 @@ const REQUESTS = [
 
 export default function () {
   for (const req of REQUESTS) {
-    const params = { headers: req.headers, timeout: REQUEST_TIMEOUT || undefined };
+    const params = { headers: req.headers };
+    if (REQUEST_TIMEOUT) { params.timeout = REQUEST_TIMEOUT; }
     let res;
     if (req.method === 'GET') {
       res = http.get(req.url, params);
@@ -154,7 +158,7 @@ func BuildScript(spec ScriptSpec) (string, error) {
 	}
 
 	for i := range spec.Interfaces {
-		req, err := buildRequest(&spec.Interfaces[i])
+		req, err := buildRequest(&spec.Interfaces[i], spec.TargetHost)
 		if err != nil {
 			return "", err
 		}
@@ -169,19 +173,10 @@ func BuildScript(spec ScriptSpec) (string, error) {
 }
 
 // buildRequest 校验并构建模板请求（URL/方法/请求头/请求体白名单）。
-func buildRequest(snap *domain.InterfaceSnapshot) (*scriptRequest, error) {
-	rawURL := strings.TrimSpace(snap.URL)
-	if len(rawURL) == 0 || len(rawURL) > maxURLLen {
-		return nil, fmt.Errorf("接口地址非法")
-	}
-	for _, r := range rawURL {
-		if r <= 0x20 || r == 0x7f {
-			return nil, fmt.Errorf("接口地址含非法字符")
-		}
-	}
-	u, err := url.Parse(rawURL)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return nil, fmt.Errorf("接口地址必须为 http/https 且包含主机")
+func buildRequest(snap *domain.InterfaceSnapshot, targetHost string) (*scriptRequest, error) {
+	rawURL, err := interfaceURL(snap, targetHost)
+	if err != nil {
+		return nil, err
 	}
 
 	method := strings.ToUpper(strings.TrimSpace(snap.Method))
@@ -212,6 +207,35 @@ func buildRequest(snap *domain.InterfaceSnapshot) (*scriptRequest, error) {
 		Headers: string(rawHeaders),
 		Body:    body,
 	}, nil
+}
+
+// interfaceURL 生成单接口的完整压测地址。
+//
+// 新口径：{scheme}://{target_host}:{port}{path}（接口不配置 host）；
+// 兼容口径：迁移前创建的任务快照只有完整 url，原样使用并做同等白名单校验。
+func interfaceURL(snap *domain.InterfaceSnapshot, targetHost string) (string, error) {
+	if path := strings.TrimSpace(snap.Path); path != "" {
+		rawURL, err := domain.InterfaceURL(snap.Scheme, targetHost, snap.Port, path)
+		if err != nil || len(rawURL) > maxURLLen {
+			return "", fmt.Errorf("接口地址非法")
+		}
+		return rawURL, nil
+	}
+
+	rawURL := strings.TrimSpace(snap.URL)
+	if len(rawURL) == 0 || len(rawURL) > maxURLLen {
+		return "", fmt.Errorf("接口地址非法")
+	}
+	for _, r := range rawURL {
+		if r <= 0x20 || r == 0x7f {
+			return "", fmt.Errorf("接口地址含非法字符")
+		}
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return "", fmt.Errorf("接口地址必须为 http/https 且包含主机")
+	}
+	return rawURL, nil
 }
 
 // pulseStages 生成脉冲加压档位：升压 → 保持 → 降压 → 静默（四段均分总时长）。

@@ -43,6 +43,7 @@ func (h *Handler) CreateTask(c *gin.Context) {
 		Name:         req.Name,
 		TemplateID:   templateID,
 		EnvID:        envID,
+		TargetHost:   req.TargetHost,
 		ProductIDs:   productIDs,
 		InterfaceIDs: interfaceIDs,
 		Flow:         req.Flow,

@@ -4,14 +4,14 @@
       <div class="title-block">
         <h2 class="ap-page-title">
           接口管理
-          <span v-if="store.activeProduct" class="ap-muted product-hint">
-            · {{ store.activeProduct.name }}（{{ store.activeProduct.code }} / {{ store.activeProduct.product_version }}）
+          <span v-if="headerProduct" class="ap-muted product-hint">
+            · {{ headerProduct.name }}（{{ headerProduct.code }} / {{ headerProduct.product_version }}）
           </span>
         </h2>
         <RouterLink to="/products/list" class="ap-link">返回产品列表</RouterLink>
       </div>
       <button
-        v-if="canWrite && productId"
+        v-if="canWrite && productId && !productMissing"
         type="button"
         class="ap-btn ap-btn-primary"
         :disabled="!store.activeProduct"
@@ -22,8 +22,21 @@
     </div>
 
     <form class="ap-card ap-toolbar" @submit.prevent="search">
+      <label class="ap-field product-field">
+        <span class="ap-field-label">产品 *</span>
+        <select
+          :value="selectedProductId"
+          :disabled="store.loading || store.interfaceLoading"
+          @change="onProductChange"
+        >
+          <option value="">请选择产品</option>
+          <option v-for="item in store.products" :key="item.id" :value="item.id">
+            {{ item.name }}（{{ item.code }}）
+          </option>
+        </select>
+      </label>
       <label class="ap-field">
-        <span class="ap-field-label">接口名称/地址</span>
+        <span class="ap-field-label">接口名称/路径</span>
         <input v-model="filters.keyword" placeholder="关键字检索" maxlength="128" />
       </label>
       <label class="ap-field">
@@ -35,7 +48,11 @@
         </select>
       </label>
       <div class="ap-actions">
-        <button type="submit" class="ap-btn ap-btn-primary" :disabled="store.interfaceLoading">
+        <button
+          type="submit"
+          class="ap-btn ap-btn-primary"
+          :disabled="!productId || store.interfaceLoading"
+        >
           查询
         </button>
         <button type="button" class="ap-btn ap-btn-ghost" @click="resetFilters">重置</button>
@@ -44,20 +61,17 @@
 
     <p v-if="errorMessage" class="ap-alert ap-alert-error" role="alert">{{ errorMessage }}</p>
 
-    <!-- 产品不存在（10301）时给出产品切换入口，避免导航里写死产品 ID 造成死路 -->
-    <div v-if="productMissing" class="ap-card product-picker">
-      <p class="ap-alert ap-alert-hint">未找到该产品，请选择要维护的产品：</p>
-      <div class="ap-actions">
-        <select v-model="pickedProductId">
-          <option value="">请选择产品</option>
-          <option v-for="item in store.products" :key="item.id" :value="item.id">
-            {{ item.name }}（{{ item.code }}）
-          </option>
-        </select>
-        <button type="button" class="ap-btn ap-btn-primary" :disabled="!pickedProductId" @click="switchProduct">
-          进入接口管理
-        </button>
-      </div>
+    <div v-if="!productId" class="ap-card">
+      <p class="ap-alert ap-alert-hint">
+        请在页面顶部「产品」下拉中选择要维护的产品，选中后加载该产品下的接口。
+      </p>
+    </div>
+
+    <!-- 产品不存在（10301）时给出提示，避免导航里写死产品 ID 造成死路 -->
+    <div v-else-if="productMissing" class="ap-card">
+      <p class="ap-alert ap-alert-error">
+        未找到该产品（可能已被删除或无权访问），请通过顶部「产品」下拉切换其他产品。
+      </p>
     </div>
 
     <InterfaceTable
@@ -71,7 +85,7 @@
       @thresholds="openThresholds"
     />
 
-    <div v-if="!productMissing" class="ap-pagination">
+    <div v-if="productId && !productMissing" class="ap-pagination">
       <span>共 {{ store.interfaceTotal }} 条，第 {{ store.interfacePage }} / {{ totalPages }} 页</span>
       <button
         type="button"
@@ -126,7 +140,7 @@ import type {
   InterfaceInfo,
   InterfacePayload,
   InterfaceStatus,
-	ThresholdInfo,
+  ThresholdInfo,
   ThresholdPayload,
 } from '@/types'
 
@@ -140,7 +154,8 @@ const router = useRouter()
 const canWrite = computed(() => auth.hasPerm('product.interface', 'write'))
 const productId = computed(() => String(route.params.productId ?? ''))
 const productMissing = ref(false)
-const pickedProductId = ref('')
+/** 顶部产品下拉的当前值（路由参数的产品；空串表示尚未选择产品）。 */
+const selectedProductId = ref(productId.value)
 
 const filters = reactive({ keyword: '', status: '' })
 const errorMessage = ref('')
@@ -157,6 +172,11 @@ const thresholdLoading = ref(false)
 const thresholdSaving = ref(false)
 const thresholdError = ref('')
 
+/** 页面标题中的当前产品提示（未选产品/产品不存在时不展示）。 */
+const headerProduct = computed(() =>
+  productId.value && !productMissing.value ? store.activeProduct : null,
+)
+
 const totalPages = computed(() =>
   Math.max(1, Math.ceil(store.interfaceTotal / Math.max(store.interfacePageSize, 1))),
 )
@@ -164,38 +184,40 @@ const totalPages = computed(() =>
 /** 加载接口列表（并同步产品详情；产品不存在时给出切换入口）。 */
 async function load(page = 1): Promise<void> {
   errorMessage.value = ''
-	if (!productId.value) {
-		productMissing.value = true
-		await loadProductPicker()
-		return
-	}
+  productMissing.value = false
+  if (!productId.value) {
+    // 未选产品：只提示选择产品（需求 2），不写死 productId。
+    store.clearInterfaces()
+    return
+  }
 
-	try {
-		await store.fetchInterfaces(productId.value, {
-			keyword: filters.keyword.trim() || undefined,
-			status: filters.status || undefined,
-			page,
-			page_size: 20,
-		})
-	} catch (err) {
-		// 10301 产品不存在（或已被删除）。
-		if (err instanceof ApiError && err.code === 10301) {
-			productMissing.value = true
-			await loadProductPicker()
-			return
-		}
-		errorMessage.value = err instanceof ApiError ? err.message : '加载接口列表失败'
-		return
-	}
+  try {
+    await store.fetchInterfaces(productId.value, {
+      keyword: filters.keyword.trim() || undefined,
+      status: filters.status || undefined,
+      page,
+      page_size: 20,
+    })
+  } catch (err) {
+    // 10301 产品不存在（或已被删除）。
+    if (err instanceof ApiError && err.code === 10301) {
+      productMissing.value = true
+      store.clearInterfaces()
+      return
+    }
+    errorMessage.value = err instanceof ApiError ? err.message : '加载接口列表失败'
+    store.clearInterfaces()
+    return
+  }
 
-	productMissing.value = store.activeProduct === null
-	if (productMissing.value) await loadProductPicker()
+  productMissing.value = store.activeProduct === null
 }
 
-/** 产品不存在时加载产品列表供切换。 */
-async function loadProductPicker(): Promise<void> {
+/** 加载产品下拉选项（接口管理页始终展示产品切换）。 */
+async function loadProducts(): Promise<void> {
   try {
-    await store.fetchList({ page: 1, page_size: 100 })
+    // 上限 200（api-contract §1.3），覆盖产品下拉选择场景。
+    await store.fetchList({ page: 1, page_size: 200 })
   } catch {
     errorMessage.value = '加载产品列表失败，请稍后重试'
   }
@@ -215,12 +237,16 @@ function goPage(page: number): void {
   void load(page)
 }
 
-function switchProduct(): void {
-  if (!pickedProductId.value) return
-  void router.push({
-    name: 'interface-list',
-    params: { productId: pickedProductId.value },
-  })
+/** 切换产品：改写路由参数后由 productId watcher 触发加载（空值回到“未选择产品”）。 */
+function onProductChange(event: Event): void {
+  const value = (event.target as HTMLSelectElement).value
+  selectedProductId.value = value
+  if (value === productId.value) return // 重复选择同一产品：不触发冗余导航
+  if (!value) {
+    void router.push({ name: 'interface-list' })
+    return
+  }
+  void router.push({ name: 'interface-list', params: { productId: value } })
 }
 
 function openCreate(): void {
@@ -326,13 +352,14 @@ async function onSaveThresholds(rows: ThresholdPayload[]): Promise<void> {
   }
 }
 
-/** 路由产品 ID 变化（从产品列表点「接口管理」）时重新加载。 */
-watch(productId, () => {
-  pickedProductId.value = ''
+/** 路由产品 ID 变化（从产品列表点「接口管理」或顶部下拉切换）时重新加载。 */
+watch(productId, (value) => {
+  selectedProductId.value = value
   void load(1)
 })
 
 onMounted(() => {
+  void loadProducts()
   void load(1)
 })
 </script>
@@ -349,17 +376,7 @@ onMounted(() => {
   font-weight: normal;
 }
 
-.product-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.product-picker select {
+.product-field select {
   min-width: 220px;
-  padding: 7px 9px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 13px;
 }
 </style>

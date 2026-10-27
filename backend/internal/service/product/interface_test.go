@@ -18,7 +18,9 @@ func validInterfaceInput() InterfaceInput {
 	return InterfaceInput{
 		Name:   "创建订单",
 		Method: domain.MethodPost,
-		URL:    "https://api.example.com/orders",
+		Scheme: "https",
+		Port:   443,
+		Path:   "/orders",
 		Headers: map[string]string{
 			"Content-Type":  "application/json",
 			"Authorization": "Bearer super-secret-token",
@@ -40,8 +42,13 @@ func TestCreateInterfaceValidatesInput(t *testing.T) {
 		want error
 	}{
 		{"缺名称", func(in *InterfaceInput) { in.Name = "" }, errcode.ErrParamMiss},
-		{"缺地址", func(in *InterfaceInput) { in.URL = " " }, errcode.ErrParamMiss},
-		{"地址非 http(s)", func(in *InterfaceInput) { in.URL = "ftp://api.example.com" }, errcode.ErrParamFmt},
+		{"缺协议", func(in *InterfaceInput) { in.Scheme = " " }, errcode.ErrParamMiss},
+		{"协议非 http(s)", func(in *InterfaceInput) { in.Scheme = "ftp" }, errcode.ErrParamFmt},
+		{"缺端口", func(in *InterfaceInput) { in.Port = 0 }, errcode.ErrParamMiss},
+		{"端口越界", func(in *InterfaceInput) { in.Port = 65536 }, errcode.ErrParamFmt},
+		{"缺路径", func(in *InterfaceInput) { in.Path = " " }, errcode.ErrParamMiss},
+		{"路径不以 / 开头", func(in *InterfaceInput) { in.Path = "orders" }, errcode.ErrParamFmt},
+		{"路径含空白", func(in *InterfaceInput) { in.Path = "/or ders" }, errcode.ErrParamFmt},
 		{"方法非法", func(in *InterfaceInput) { in.Method = "TRACE" }, errcode.ErrParamFmt},
 		{"参数模板非 JSON", func(in *InterfaceInput) { in.Body = "{not-json" }, errcode.ErrParamFmt},
 		{"超时越界", func(in *InterfaceInput) { in.Timeouts.ReadMS = maxTimeoutMS + 1 }, errcode.ErrParamFmt},
@@ -75,7 +82,8 @@ func TestCreateInterfaceValidatesInput(t *testing.T) {
 	if view.Status != domain.InterfaceStatusEnabled || view.Version != 1 {
 		t.Fatalf("新建接口状态/版本异常: %+v", view)
 	}
-	if view.Method != domain.MethodPost || view.URL != "https://api.example.com/orders" {
+	if view.Method != domain.MethodPost || view.Scheme != domain.SchemeHTTPS ||
+		view.Port != 443 || view.Path != "/orders" {
 		t.Fatalf("字段绑定异常: %+v", view)
 	}
 }
@@ -159,7 +167,9 @@ func TestUpdateInterfaceKeepsEncryptedHeader(t *testing.T) {
 
 	in := validInterfaceInput()
 	in.Version = created.Version
-	in.URL = "https://api.example.com/v2/orders"
+	in.Scheme = "https"
+	in.Port = 8443
+	in.Path = "/v2/orders"
 	in.Headers = map[string]string{
 		"Content-Type":  "application/json",
 		"Authorization": "", // 留空 → 沿用旧密文值
@@ -169,7 +179,8 @@ func TestUpdateInterfaceKeepsEncryptedHeader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("修改接口失败: %v", err)
 	}
-	if updated.URL != "https://api.example.com/v2/orders" || updated.Version != created.Version+1 {
+	if updated.Scheme != domain.SchemeHTTPS || updated.Port != 8443 || updated.Path != "/v2/orders" ||
+		updated.Version != created.Version+1 {
 		t.Fatalf("修改结果异常: %+v", updated)
 	}
 	if len(updated.AuthHeaders) != 2 {

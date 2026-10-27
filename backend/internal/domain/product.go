@@ -284,12 +284,17 @@ func (t InterfaceTimeouts) IsZero() bool { return t.ConnectMS == 0 && t.ReadMS =
 //
 // Headers 仅存放普通请求头；认证头明文只存在于服务层内存（SensitiveHeaders），
 // 落库时写入 HeadersEnc（AES-256-GCM 密文），响应/日志一律脱敏（DES-I-001）。
+//
+// 接口地址拆分为 Scheme/Port/Path 三段，不保存 host：执行期完整地址 =
+// {scheme}://{任务 target_host}:{port}{path}（PRD §4.5/§4.8）。
 type Interface struct {
 	ID               int64
 	ProductID        int64
 	Name             string
 	Method           string
-	URL              string
+	Scheme           string
+	Port             int
+	Path             string
 	Headers          map[string]string
 	SensitiveHeaders map[string]string
 	HeadersEnc       []byte

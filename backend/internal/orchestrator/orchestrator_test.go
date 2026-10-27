@@ -165,13 +165,17 @@ func TestExecuteCleanupFailureLeavesPending(t *testing.T) {
 	}
 }
 
-// TestCleanPlanRequiresSSHHost 环境未绑定 SSH 主机 → 清理计划无法构建（DES-T-003 可信主机）。
-func TestCleanPlanRequiresSSHHost(t *testing.T) {
+// TestCleanPlanNoHostBuiltinIsNoop 环境未绑定 SSH 主机 + 仅内置动作 → 无需清理（no-op 成功）。
+func TestCleanPlanNoHostBuiltinIsNoop(t *testing.T) {
 	store := &fakeStore{task: newCleanTask(domain.TaskCleaning), sshHost: 0}
 	o := New(Deps{Store: store})
 	task, _ := store.GetTask(context.Background(), 42)
-	if _, err := o.cleanPlan(context.Background(), task); !errors.Is(err, cleaner.ErrNoHost) {
-		t.Fatalf("缺少清理主机应返回 ErrNoHost, got %v", err)
+	plan, err := o.cleanPlan(context.Background(), task)
+	if err != nil {
+		t.Fatalf("无主机内置动作应成功(no-op), got %v", err)
+	}
+	if len(plan.Actions) != 0 || len(plan.Scripts) != 0 {
+		t.Fatalf("无主机内置动作应为空计划, got %+v", plan)
 	}
 }
 
@@ -196,11 +200,14 @@ func TestFailTaskEntersCleanupPending(t *testing.T) {
 // TestBuildScriptDecryptsAuthHeaders 认证头密文在执行期解密注入脚本，且明文不回写快照（INV-7）。
 func TestBuildScriptDecryptsAuthHeaders(t *testing.T) {
 	store := &fakeStore{task: newCleanTask(domain.TaskRunning)}
+	store.task.TargetHost = "10.52.78.246"
 	store.task.InterfaceSnapshots = []domain.InterfaceSnapshot{{
 		InterfaceID:    11,
 		Name:           "查询订单",
 		Method:         "GET",
-		URL:            "https://api.example.test/orders",
+		Scheme:         domain.SchemeHTTPS,
+		Port:           8443,
+		Path:           "/orders",
 		Headers:        map[string]string{"X-Trace-Id": "abc"},
 		AuthHeadersEnc: []byte("cipher"),
 		Timeouts:       domain.InterfaceTimeouts{TotalMS: 1000},
@@ -225,6 +232,9 @@ func TestBuildScriptDecryptsAuthHeaders(t *testing.T) {
 	}
 	if !strings.Contains(script, `Authorization`) || !strings.Contains(script, `Bearer token-123`) {
 		t.Fatalf("认证头未注入脚本:\n%s", script)
+	}
+	if !strings.Contains(script, `url: "https://10.52.78.246:8443/orders"`) {
+		t.Fatalf("执行期 URL 应使用任务 target_host 拼接:\n%s", script)
 	}
 	if strings.Contains(script, "cipher") {
 		t.Fatal("脚本不得包含认证头密文")

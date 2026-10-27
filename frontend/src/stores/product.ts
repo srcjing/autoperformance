@@ -106,6 +106,14 @@ export const useProductStore = defineStore('product', () => {
 		}
 	}
 
+  /** 清空当前产品的接口列表（未选产品/加载失败时避免展示上一个产品的脏数据）。 */
+  function clearInterfaces(): void {
+    interfaces.value = []
+    interfaceTotal.value = 0
+    interfacePage.value = 1
+    activeProduct.value = null
+  }
+
   /** 新建/修改接口（id 为空表示新建，需提供 productId）。 */
   async function saveInterface(
     productId: string,
@@ -160,6 +168,7 @@ export const useProductStore = defineStore('product', () => {
     removeProduct,
     setStatus,
     fetchInterfaces,
+    clearInterfaces,
     saveInterface,
     removeInterface,
     setInterfaceStatus,

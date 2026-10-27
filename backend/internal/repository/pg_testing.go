@@ -21,7 +21,8 @@ const (
 		COALESCE(clean_config, '{}'::jsonb), COALESCE(description, ''),
 		version, created_at, updated_at`
 
-	taskColumns = `id, COALESCE(template_id, 0), name, env_id, COALESCE(created_by, 0),
+	taskColumns = `id, COALESCE(template_id, 0), name, env_id, COALESCE(target_host, ''),
+		COALESCE(created_by, 0),
 		COALESCE(product_ids, '[]'::jsonb), COALESCE(interface_ids, '[]'::jsonb),
 		COALESCE(interface_range_snapshot, '[]'::jsonb), COALESCE(threshold_snapshot, '[]'::jsonb),
 		COALESCE(flow, '{}'::jsonb), COALESCE(report_config, '{}'::jsonb),
@@ -76,7 +77,7 @@ func scanTask(row pgx.Row) (*domain.TestTask, error) {
 		interfaceSnapshots, thresholdSnapshots []byte
 		flow, reportConfig, cleanCfg, result   []byte
 	)
-	if err := row.Scan(&t.ID, &t.TemplateID, &t.Name, &t.EnvID, &t.CreatedBy,
+	if err := row.Scan(&t.ID, &t.TemplateID, &t.Name, &t.EnvID, &t.TargetHost, &t.CreatedBy,
 		&productIDs, &interfaceIDs, &interfaceSnapshots, &thresholdSnapshots,
 		&flow, &reportConfig, &cleanCfg, &status, &t.StartedAt, &t.FinishedAt,
 		&result, &t.Version, &t.CreatedAt, &t.UpdatedAt); err != nil {
@@ -320,15 +321,22 @@ func (r *PGRepository) SoftDeleteTemplate(ctx context.Context, id int64) error {
 
 // LockEnvironment 事务内锁定环境行（SELECT ... FOR UPDATE，INV-4 / DES-D-001）。
 func (r *PGRepository) LockEnvironment(ctx context.Context, tx Tx, envID int64) (*domain.Environment, error) {
-	const q = `SELECT id, status, COALESCE(ssh_host_id, 0) FROM environment
-	           WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`
+	const q = `SELECT id, status, COALESCE(ssh_host_id, 0), COALESCE(hosts, '[]'::jsonb)
+	           FROM environment WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`
 	env := &domain.Environment{}
-	err := r.conn(tx).QueryRow(ctx, q, envID).Scan(&env.ID, &env.Status, &env.SshHostID)
+	var hosts []byte
+	err := r.conn(tx).QueryRow(ctx, q, envID).Scan(&env.ID, &env.Status, &env.SshHostID, &hosts)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errcode.ErrNotFound
 		}
 		return nil, fmt.Errorf("锁定环境失败: %w", err)
+	}
+	if err := decodeJSONArray(hosts, &env.Hosts); err != nil {
+		return nil, fmt.Errorf("解析环境主机列表失败: %w", err)
+	}
+	if env.Hosts == nil {
+		env.Hosts = []string{}
 	}
 	return env, nil
 }
@@ -381,7 +389,8 @@ func (r *PGRepository) SnapshotInterfaces(ctx context.Context, tx Tx, ids []int6
 		return []domain.InterfaceSnapshot{}, nil
 	}
 	const q = `
-		SELECT i.id, i.product_id, COALESCE(p.name, ''), i.name, i.method, i.url,
+		SELECT i.id, i.product_id, COALESCE(p.name, ''), i.name, i.method,
+		       COALESCE(i.scheme, 'http'), COALESCE(i.port, 80), COALESCE(i.path, '/'),
 		       COALESCE(i.headers, '{}'::jsonb), COALESCE(i.headers_enc, ''::bytea),
 		       COALESCE(i.body::text, ''), COALESCE(i.timeouts, '{}'::jsonb), i.status
 		FROM interface i
@@ -402,7 +411,8 @@ func (r *PGRepository) SnapshotInterfaces(ctx context.Context, tx Tx, ids []int6
 			timeouts []byte
 		)
 		if err := rows.Scan(&snap.InterfaceID, &snap.ProductID, &snap.ProductName, &snap.Name,
-			&snap.Method, &snap.URL, &headers, &snap.AuthHeadersEnc, &snap.Body, &timeouts, &snap.Status); err != nil {
+			&snap.Method, &snap.Scheme, &snap.Port, &snap.Path,
+			&headers, &snap.AuthHeadersEnc, &snap.Body, &timeouts, &snap.Status); err != nil {
 			return nil, fmt.Errorf("扫描接口快照失败: %w", err)
 		}
 		if len(headers) > 0 {
@@ -494,13 +504,13 @@ func (r *PGRepository) CreateTask(ctx context.Context, tx Tx, task *domain.TestT
 
 	const q = `
 		INSERT INTO test_task
-			(template_id, name, env_id, created_by, product_ids, interface_ids,
+			(template_id, name, env_id, target_host, created_by, product_ids, interface_ids,
 			 interface_range_snapshot, threshold_snapshot, flow, report_config, clean_config, status)
-		VALUES (NULLIF($1, 0), $2, $3, NULLIF($4, 0), $5::jsonb, $6::jsonb,
-		        $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12)
+		VALUES (NULLIF($1, 0), $2, $3, $4, NULLIF($5, 0), $6::jsonb, $7::jsonb,
+		        $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13)
 		RETURNING id, version, created_at, updated_at`
 	err = r.conn(tx).QueryRow(ctx, q,
-		task.TemplateID, task.Name, task.EnvID, task.CreatedBy, productIDs, interfaceIDs,
+		task.TemplateID, task.Name, task.EnvID, task.TargetHost, task.CreatedBy, productIDs, interfaceIDs,
 		ifaceSnapshots, thresholdSnapshots, flow, reportConfig, cleanConfig, string(task.Status),
 	).Scan(&task.ID, &task.Version, &task.CreatedAt, &task.UpdatedAt)
 	if err != nil {

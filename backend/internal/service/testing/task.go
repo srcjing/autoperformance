@@ -96,9 +96,11 @@ func (s *Service) WithMaxVUs(maxVUs int) *Service {
 //
 // Flow/ReportConfig/CleanConfig 为 JSON 原文；nil 表示未显式给出，可沿用模板默认值。
 type CreateTaskInput struct {
-	Name         string
-	TemplateID   int64
-	EnvID        int64
+	Name       string
+	TemplateID int64
+	EnvID      int64
+	// TargetHost 压测目标主机：必须属于所选环境的 hosts（PRD §4.8）。
+	TargetHost   string
 	ProductIDs   []int64
 	InterfaceIDs []int64
 	Flow         json.RawMessage
@@ -114,6 +116,7 @@ type TaskView struct {
 	Name               string
 	TemplateID         int64
 	EnvID              int64
+	TargetHost         string
 	CreatedBy          int64
 	ProductIDs         []int64
 	InterfaceIDs       []int64
@@ -166,6 +169,11 @@ func (s *Service) Create(ctx context.Context, in CreateTaskInput) (*TaskView, er
 	}
 	if len([]rune(name)) > 128 {
 		return nil, errcode.ErrParamFmt
+	}
+	// 接口不保存 host：执行前必须显式选定压测目标主机（需求 1）。
+	targetHost := strings.TrimSpace(in.TargetHost)
+	if targetHost == "" {
+		return nil, errcode.ErrParamMiss
 	}
 	// auto_start 依赖编排器；缺失时在落库前直接拒绝，避免产生无法执行的任务。
 	if in.AutoStart && s.executor == nil {
@@ -243,6 +251,7 @@ func (s *Service) Create(ctx context.Context, in CreateTaskInput) (*TaskView, er
 		TemplateID:   in.TemplateID,
 		Name:         name,
 		EnvID:        envID,
+		TargetHost:   targetHost,
 		CreatedBy:    in.CreatedBy,
 		ProductIDs:   dedupeIDs(in.ProductIDs),
 		InterfaceIDs: interfaceIDs,
@@ -263,11 +272,20 @@ func (s *Service) Create(ctx context.Context, in CreateTaskInput) (*TaskView, er
 		case domain.EnvStatusDisabled:
 			return errcode.ErrParamFmt // 已下线环境不可用于新任务（PRD §3.1.5）
 		}
+		// 目标主机必须来自所选环境的 hosts（防止跨环境打错目标）。
+		if !domain.HostInList(task.TargetHost, env.Hosts) {
+			return errcode.ErrParamFmt
+		}
+		// 环境 hosts 由人工维护：拼接前再做一次地址白名单校验（拒绝带端口/路径的写法）。
+		if !domain.IsValidHostAddress(task.TargetHost) {
+			return errcode.ErrParamFmt
+		}
 
 		snapshots, err := s.repo.SnapshotInterfaces(ctx, tx, interfaceIDs)
 		if err != nil {
 			return err
 		}
+		fillSnapshotURLs(snapshots, task.TargetHost)
 		task.InterfaceSnapshots = snapshots
 
 		thresholds, err := s.repo.SnapshotThresholds(ctx, tx, interfaceIDs)
@@ -507,6 +525,7 @@ func toTaskView(t *domain.TestTask) TaskView {
 		Name:               t.Name,
 		TemplateID:         t.TemplateID,
 		EnvID:              t.EnvID,
+		TargetHost:         t.TargetHost,
 		CreatedBy:          t.CreatedBy,
 		ProductIDs:         append([]int64{}, t.ProductIDs...),
 		InterfaceIDs:       append([]int64{}, t.InterfaceIDs...),
@@ -522,6 +541,24 @@ func toTaskView(t *domain.TestTask) TaskView {
 		Version:            t.Version,
 		CreatedAt:          t.CreatedAt,
 		UpdatedAt:          t.UpdatedAt,
+	}
+}
+
+// fillSnapshotURLs 用所选 target_host 回填快照的展示地址（{scheme}://{host}:{port}{path}）。
+//
+// 执行期地址仍由引擎按 scheme/host/port/path 现场拼接；此处仅用于响应与报告展示，
+// 解析失败（历史脏数据）时保留原 url 不动，不阻断任务创建。
+func fillSnapshotURLs(snapshots []domain.InterfaceSnapshot, targetHost string) {
+	for i := range snapshots {
+		snap := &snapshots[i]
+		if strings.TrimSpace(snap.Path) == "" {
+			continue // 迁移前的历史快照（仅有 url）保持原值
+		}
+		url, err := domain.InterfaceURL(snap.Scheme, targetHost, snap.Port, snap.Path)
+		if err != nil {
+			continue
+		}
+		snap.URL = url
 	}
 }
 

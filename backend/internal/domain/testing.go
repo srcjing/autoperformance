@@ -65,15 +65,22 @@ type TestTemplate struct {
 
 // InterfaceSnapshot 接口范围快照项（创建任务时固化，INV-5）。
 //
+// 地址拆分为 scheme/port/path（接口不配置 host）：执行期完整地址 =
+// {scheme}://{任务 target_host}:{port}{path}。
 // 仅固化普通请求头与认证头名称；认证头明文不进入快照（INV-7），执行时由编排器
 // 从接口记录解密读取。
 type InterfaceSnapshot struct {
-	InterfaceID     int64             `json:"interface_id"`
-	ProductID       int64             `json:"product_id"`
-	ProductName     string            `json:"product_name,omitempty"`
-	Name            string            `json:"name"`
-	Method          string            `json:"method"`
-	URL             string            `json:"url"`
+	InterfaceID int64  `json:"interface_id"`
+	ProductID   int64  `json:"product_id"`
+	ProductName string `json:"product_name,omitempty"`
+	Name        string `json:"name"`
+	Method      string `json:"method"`
+	Scheme      string `json:"scheme"`
+	Port        int    `json:"port"`
+	Path        string `json:"path"`
+	// URL 为展示用完整地址（迁移前创建的历史快照保留原值；新任务由服务层用
+	// 所选 target_host 拼接回填），不作为执行期地址唯一事实源。
+	URL             string            `json:"url,omitempty"`
 	Headers         map[string]string `json:"headers,omitempty"`
 	AuthHeaderNames []string          `json:"auth_header_names,omitempty"`
 	// AuthHeadersEnc 认证头 AES-256-GCM 密文（INV-7：不落明文；执行期由编排器解密注入脚本）。
@@ -97,10 +104,12 @@ type ThresholdSnapshot struct {
 
 // TestTask 测试任务（PRD §4.8）。
 type TestTask struct {
-	ID                 int64
-	TemplateID         int64
-	Name               string
-	EnvID              int64
+	ID         int64
+	TemplateID int64
+	Name       string
+	EnvID      int64
+	// TargetHost 压测目标主机（从所选环境 hosts 中任选一个，PRD §4.8）。
+	TargetHost         string
 	CreatedBy          int64
 	ProductIDs         []int64
 	InterfaceIDs       []int64

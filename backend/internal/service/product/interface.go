@@ -22,7 +22,9 @@ import (
 type InterfaceInput struct {
 	Name        string
 	Method      string
-	URL         string
+	Scheme      string // http | https
+	Port        int    // 1-65535
+	Path        string // 以 / 开头的路径（不含 host）
 	Headers     map[string]string
 	Body        string
 	Timeouts    domain.InterfaceTimeouts
@@ -39,7 +41,9 @@ type InterfaceView struct {
 	ProductID   int64
 	Name        string
 	Method      string
-	URL         string
+	Scheme      string
+	Port        int
+	Path        string
 	Headers     map[string]string
 	AuthHeaders []string
 	Body        string
@@ -262,16 +266,26 @@ func validateInterfaceInput(in InterfaceInput) (*domain.Interface, error) {
 		return nil, errcode.ErrParamFmt
 	}
 
-	url := strings.TrimSpace(in.URL)
-	if url == "" {
+	// 接口地址 = 协议 + 端口 + 路径（不配置 host；host 由任务所选环境决定）。
+	scheme := strings.ToLower(strings.TrimSpace(in.Scheme))
+	if scheme == "" {
 		return nil, errcode.ErrParamMiss
 	}
-	if len(url) > maxURLLen {
-		return nil, errcode.ErrParamFmt
+	if !domain.IsValidScheme(scheme) {
+		return nil, errcode.ErrParamFmt // 协议仅支持 http/https
 	}
-	lower := strings.ToLower(url)
-	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
-		return nil, errcode.ErrParamFmt // 接口地址必须是 http(s) 端点（k6 引擎可直接消费）
+	if in.Port == 0 {
+		return nil, errcode.ErrParamMiss
+	}
+	if !domain.IsValidPort(in.Port) {
+		return nil, errcode.ErrParamFmt // 端口需在 1~65535
+	}
+	path := strings.TrimSpace(in.Path)
+	if path == "" {
+		return nil, errcode.ErrParamMiss
+	}
+	if !domain.IsValidInterfacePath(path) {
+		return nil, errcode.ErrParamFmt // 路径必须以 / 开头且不含空白/控制字符
 	}
 
 	method := strings.ToUpper(strings.TrimSpace(in.Method))
@@ -319,7 +333,9 @@ func validateInterfaceInput(in InterfaceInput) (*domain.Interface, error) {
 	return &domain.Interface{
 		Name:        name,
 		Method:      method,
-		URL:         url,
+		Scheme:      scheme,
+		Port:        in.Port,
+		Path:        path,
 		Headers:     safeHeaders,
 		Body:        body,
 		Timeouts:    timeouts,
@@ -349,7 +365,9 @@ func (s *Service) buildInterfaceView(api *domain.Interface) (*InterfaceView, err
 		ProductID:   api.ProductID,
 		Name:        api.Name,
 		Method:      api.Method,
-		URL:         api.URL,
+		Scheme:      api.Scheme,
+		Port:        api.Port,
+		Path:        api.Path,
 		Headers:     headers,
 		AuthHeaders: names,
 		Body:        api.Body,

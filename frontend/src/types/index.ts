@@ -278,13 +278,18 @@ export interface InterfaceTimeouts {
   total_ms: number
 }
 
+/** 接口协议（接口不再配置 host，执行期由任务的 target_host 补齐）。 */
+export type InterfaceScheme = 'http' | 'https'
+
 /** 接口实体（认证头只回传名称 auth_headers，值不出现在响应中）。 */
 export interface InterfaceInfo {
   id: string
   product_id: string
   name: string
   method: HttpMethod
-  url: string
+  scheme: InterfaceScheme
+  port: number
+  path: string
   headers?: Record<string, string>
   auth_headers: string[]
   body?: unknown
@@ -300,7 +305,9 @@ export interface InterfaceInfo {
 export interface InterfacePayload {
   name: string
   method: HttpMethod
-  url: string
+  scheme: InterfaceScheme
+  port: number
+  path: string
   headers?: Record<string, string>
   body?: unknown
   timeouts?: InterfaceTimeouts
@@ -511,7 +518,11 @@ export interface InterfaceSnapshotItem {
   product_name?: string
   name: string
   method: string
-  url: string
+  scheme?: InterfaceScheme
+  port?: number
+  path?: string
+  /** 展示用完整地址（由任务 target_host 拼接；历史快照保留原值）。 */
+  url?: string
   auth_headers: string[]
   status: string
   captured_at: string
@@ -534,6 +545,8 @@ export interface TestTaskInfo {
   name: string
   template_id?: string
   environment_id: string
+  /** 压测目标主机（取自所选环境 hosts 中的任一项）。 */
+  target_host: string
   interface_ids: string[]
   product_ids?: string[]
   flow: FlowConfigPayload
@@ -553,6 +566,8 @@ export interface TestTaskInfo {
 export interface CreateTaskPayload {
   name: string
   environment_id: string
+  /** 压测目标主机：必须属于所选环境的 hosts。 */
+  target_host: string
   interface_ids: string[]
   product_ids?: string[]
   template_id?: string

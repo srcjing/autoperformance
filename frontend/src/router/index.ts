@@ -39,7 +39,13 @@ const routes: RouteRecordRaw[] = [
       { path: 'environments/tags', name: 'tag-list', component: () => import('@/views/environment/TagListView.vue'), meta: { title: '标签维护', module: 'env.tag' } },
       // 产品管理
       { path: 'products/list', name: 'product-list', component: () => import('@/views/product/ProductListView.vue'), meta: { title: '产品列表', module: 'product.list' } },
-      { path: 'products/:productId/interfaces', name: 'interface-list', component: () => import('@/views/product/InterfaceListView.vue'), meta: { title: '接口管理', module: 'product.interface' } },
+      // 接口管理：产品由页面顶部下拉选择（可选 productId 用于从产品列表直达）。
+      { path: 'products/interfaces/:productId?', name: 'interface-list', component: () => import('@/views/product/InterfaceListView.vue'), meta: { title: '接口管理', module: 'product.interface' } },
+      // 兼容旧链接（/products/1/interfaces）与历史收藏。
+      {
+        path: 'products/:productId(\\d+)/interfaces',
+        redirect: (to) => ({ name: 'interface-list', params: { productId: String(to.params.productId) } }),
+      },
       // 测试管理
       { path: 'testing/templates', name: 'template-list', component: () => import('@/views/testing/TemplateListView.vue'), meta: { title: '预设模板', module: 'testing.template' } },
       { path: 'testing/tasks', name: 'task-list', component: () => import('@/views/testing/TaskListView.vue'), meta: { title: '测试任务', module: 'testing.task' } },

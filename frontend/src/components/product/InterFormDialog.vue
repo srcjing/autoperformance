@@ -20,15 +20,39 @@
           </label>
         </div>
 
-        <label class="ap-field">
-          <span class="ap-field-label">接口地址 *（http/https）</span>
-          <input
-            v-model="url"
-            :disabled="saving"
-            placeholder="https://api.example.com/orders"
-            maxlength="2048"
-          />
-        </label>
+        <div class="ap-form-row address-row">
+          <label class="ap-field scheme-field">
+            <span class="ap-field-label">协议 *</span>
+            <select v-model="scheme" :disabled="saving">
+              <option value="http">http</option>
+              <option value="https">https</option>
+            </select>
+          </label>
+          <label class="ap-field port-field">
+            <span class="ap-field-label">端口 *（1-65535）</span>
+            <input
+              v-model.number="port"
+              :disabled="saving"
+              type="number"
+              min="1"
+              max="65535"
+              placeholder="443"
+            />
+          </label>
+          <label class="ap-field path-field">
+            <span class="ap-field-label">路径 *（以 / 开头）</span>
+            <input
+              v-model="path"
+              :disabled="saving"
+              placeholder="/api/order/create"
+              maxlength="2048"
+            />
+          </label>
+        </div>
+        <p class="ap-alert ap-alert-hint">
+          接口不配置 host：创建测试任务时从所选环境的 hosts 中任选一个作为压测 host，
+          完整地址 = 协议://host:端口 + 路径。
+        </p>
 
         <label class="ap-field">
           <span class="ap-field-label">请求头（每行一条 <code>Name: value</code>）</span>
@@ -92,7 +116,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { HttpMethod, InterfaceInfo, InterfacePayload } from '@/types'
+import type { HttpMethod, InterfaceInfo, InterfacePayload, InterfaceScheme } from '@/types'
 
 // 接口新建/编辑弹窗（全量字段 + version 乐观锁）。
 // headers 为全量替换语义：认证头值留空表示沿用已保存密文（DES-I-001）。
@@ -113,7 +137,9 @@ const methods: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 
 const name = ref('')
 const method = ref<HttpMethod>('GET')
-const url = ref('')
+const scheme = ref<InterfaceScheme>('http')
+const port = ref(80)
+const path = ref('')
 const headersText = ref('')
 const bodyText = ref('')
 const connectMS = ref(0)
@@ -137,7 +163,9 @@ function reset(): void {
   const item = props.item
   name.value = item?.name ?? ''
   method.value = item?.method ?? 'GET'
-  url.value = item?.url ?? ''
+  scheme.value = item?.scheme ?? 'http'
+  port.value = item?.port ?? (item?.scheme === 'https' ? 443 : 80)
+  path.value = item?.path ?? ''
   // 普通头直接回填；认证头仅回填名称（值留空 = 沿用已保存密文）。
   const lines: string[] = []
   for (const [key, value] of Object.entries(item?.headers ?? {})) {
@@ -185,8 +213,26 @@ function onSubmit(): void {
     formError.value = '请填写接口名称'
     return
   }
-  if (!url.value.trim()) {
-    formError.value = '请填写接口地址'
+  if (scheme.value !== 'http' && scheme.value !== 'https') {
+    formError.value = '协议仅支持 http / https'
+    return
+  }
+  const portValue = Number(port.value)
+  if (!Number.isInteger(portValue) || portValue < 1 || portValue > 65535) {
+    formError.value = '端口需为 1~65535 的整数'
+    return
+  }
+  const pathValue = path.value.trim()
+  if (!pathValue) {
+    formError.value = '请填写接口路径'
+    return
+  }
+  if (!pathValue.startsWith('/')) {
+    formError.value = '接口路径必须以 / 开头（如 /api/order/create）'
+    return
+  }
+  if (/\s/.test(pathValue)) {
+    formError.value = '接口路径不能包含空白字符'
     return
   }
 
@@ -211,7 +257,9 @@ function onSubmit(): void {
   const payload: InterfacePayload = {
     name: name.value.trim(),
     method: method.value,
-    url: url.value.trim(),
+    scheme: scheme.value,
+    port: portValue,
+    path: pathValue,
     headers: parsed.headers,
     timeouts,
     description: description.value.trim(),
@@ -236,5 +284,17 @@ function onSubmit(): void {
 <style scoped>
 .method-field {
   max-width: 140px;
+}
+
+.scheme-field {
+  max-width: 120px;
+}
+
+.port-field {
+  max-width: 160px;
+}
+
+.path-field {
+  flex: 1;
 }
 </style>

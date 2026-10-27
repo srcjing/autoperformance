@@ -1,4 +1,24 @@
-// 通用工具函数（时间展示 / 筛选参数转换）。
+// 通用工具函数（时间展示 / 接口地址展示 / 筛选参数转换）。
+
+/** 接口地址（接口不保存 host，展示时用占位符表示由环境主机决定）。 */
+export interface InterfaceAddressParts {
+  scheme: string
+  port: number
+  path: string
+}
+
+/**
+ * 接口地址展示文本：`{scheme}://<host>:{port}{path}`。
+ *
+ * 接口不再配置 host（需求 1），完整地址在创建任务时用所选环境的 target_host 拼出；
+ * 列表页用 <host> 占位，避免把某个环境的 host 误当接口固有属性。
+ */
+export function formatInterfaceAddress(item: InterfaceAddressParts): string {
+  const scheme = item.scheme || 'http'
+  const port = item.port || 80
+  const path = item.path || '/'
+  return `${scheme}://<host>:${port}${path}`
+}
 
 export function formatDateTime(iso: string): string {
   if (!iso) return '-'

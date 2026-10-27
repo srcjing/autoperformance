@@ -15,6 +15,7 @@ func validCreateTaskRequest() CreateTaskInput {
 	return CreateTaskInput{
 		Name:         "峰值压测",
 		EnvID:        1,
+		TargetHost:   "10.20.30.40",
 		InterfaceIDs: []int64{11, 12},
 		CreatedBy:    7,
 		Flow:         json.RawMessage(`{"concurrency_mode":"fixed","target_vus":100,"duration":"60s","warmup":"10s","timeout":"5s","think_time":"0.5s"}`),
@@ -78,6 +79,7 @@ func TestCreateTaskRequiresAllElements(t *testing.T) {
 	}{
 		{"名称缺失", func(in *CreateTaskInput) { in.Name = " " }, errcode.ErrParamMiss},
 		{"环境缺失", func(in *CreateTaskInput) { in.EnvID = 0 }, errcode.ErrParamMiss},
+		{"目标主机缺失", func(in *CreateTaskInput) { in.TargetHost = " " }, errcode.ErrParamMiss},
 		{"接口范围为空", func(in *CreateTaskInput) { in.InterfaceIDs = nil }, ErrInterfaceRangeEmpty},
 		{"流程缺失", func(in *CreateTaskInput) { in.Flow = nil }, errcode.ErrParamMiss},
 		{"报告配置缺失", func(in *CreateTaskInput) { in.ReportConfig = nil }, errcode.ErrParamMiss},
@@ -92,6 +94,48 @@ func TestCreateTaskRequiresAllElements(t *testing.T) {
 				t.Fatalf("want %v, got %v", tc.want, err)
 			}
 		})
+	}
+}
+
+// TestCreateTaskValidatesTargetHost target_host 必须属于所选环境 hosts（需求 1）。
+func TestCreateTaskValidatesTargetHost(t *testing.T) {
+	repo := &fakeTaskRepo{envStatus: domain.EnvStatusPending}
+	svc := NewTaskService(repo, nil)
+	ctx := context.Background()
+
+	// 不属于环境 hosts → 10003，且不得落库。
+	in := validCreateTaskRequest()
+	in.TargetHost = "10.99.99.99"
+	if _, err := svc.Create(ctx, in); !errors.Is(err, errcode.ErrParamFmt) {
+		t.Fatalf("host 不属于环境 want 10003, got %v", err)
+	}
+	if len(repo.tasks) != 0 {
+		t.Fatal("目标主机非法时不得落库任务")
+	}
+
+	// 环境 hosts 写法非法（携带端口）同样拒绝，避免拼出错误 URL。
+	bad := &fakeTaskRepo{envStatus: domain.EnvStatusPending, envHosts: []string{"10.20.30.40:8080"}}
+	in = validCreateTaskRequest()
+	in.TargetHost = "10.20.30.40:8080"
+	if _, err := NewTaskService(bad, nil).Create(ctx, in); !errors.Is(err, errcode.ErrParamFmt) {
+		t.Fatalf("带端口的 host want 10003, got %v", err)
+	}
+
+	// 域名大小写不敏感匹配，且任务保存 target_host、快照 URL 使用所选 host 拼接。
+	in = validCreateTaskRequest()
+	in.TargetHost = " env-internal.example.COM "
+	task, err := svc.Create(ctx, in)
+	if err != nil {
+		t.Fatalf("合法 host 应创建成功: %v", err)
+	}
+	if task.TargetHost != "env-internal.example.COM" {
+		t.Fatalf("视图应回传归一化后的 target_host: %q", task.TargetHost)
+	}
+	for _, snap := range task.InterfaceSnapshots {
+		want := "https://env-internal.example.COM:8443/orders"
+		if snap.URL != want {
+			t.Fatalf("快照展示地址应使用所选 host 拼接, got %q want %q", snap.URL, want)
+		}
 	}
 }
 

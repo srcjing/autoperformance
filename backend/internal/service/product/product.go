@@ -31,7 +31,6 @@ const (
 	maxVersionLen    = 32
 	maxPlatformLen   = 64
 	maxDescription   = 500
-	maxURLLen        = 2048
 	maxBodyLen       = 64 * 1024
 	maxHeaderCount   = 50
 	maxHeaderNameLen = 128

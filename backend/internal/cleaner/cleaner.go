@@ -188,15 +188,25 @@ func ParsePlan(raw json.RawMessage, hosts []int64) (*Plan, error) {
 		return nil, fmt.Errorf("%w: 清理步骤超限", ErrInvalidPlan)
 	}
 	if len(plan.Hosts) == 0 {
-		return nil, ErrNoHost
+		// 无清理主机：接口压测不修改本地环境，内置动作无需远程执行（no-op 成功）；
+		// 但显式脚本动作必须指定可信主机。
+		if len(plan.Scripts) > 0 {
+			return nil, ErrNoHost
+		}
+		plan.Actions = nil
+		return plan, nil
 	}
 	return plan, nil
 }
 
 // Validate 校验计划可信性（主机白名单 + 脚本哈希白名单），在执行前同步拒绝。
 func (c *Cleaner) Validate(plan *Plan) error {
-	if plan == nil || (len(plan.Actions) == 0 && len(plan.Scripts) == 0) {
+	if plan == nil {
 		return ErrInvalidPlan
+	}
+	if len(plan.Actions) == 0 && len(plan.Scripts) == 0 {
+		// 无操作计划 = 无需清理（no-op 成功）。
+		return nil
 	}
 	if len(plan.Hosts) == 0 {
 		return ErrNoHost

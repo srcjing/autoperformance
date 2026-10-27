@@ -32,7 +32,7 @@ func TestInterfaceFilterClauseGuards(t *testing.T) {
 		"i.deleted_at IS NULL",
 		"i.product_id = $1",
 		"i.name ILIKE $2",
-		"i.url ILIKE $2",
+		"i.path ILIKE $2",
 		"i.status = $3",
 	} {
 		if !strings.Contains(clause, want) {
@@ -42,16 +42,31 @@ func TestInterfaceFilterClauseGuards(t *testing.T) {
 }
 
 // TestScanColumnsContainSensitiveHeaderColumn 接口查询列必须包含 headers_enc（认证头密文列），
-// 且不得回读到明文认证头字段（DES-I-001）。
+// 且不得回读到明文认证头字段（DES-I-001）；地址拆分为 scheme/port/path 三列。
 func TestScanColumnsContainSensitiveHeaderColumn(t *testing.T) {
 	if !strings.Contains(interfaceColumns, "i.headers_enc") {
 		t.Fatalf("接口查询列缺少 headers_enc: %s", interfaceColumns)
+	}
+	for _, want := range []string{"i.scheme", "i.port", "i.path"} {
+		if !strings.Contains(interfaceColumns, want) {
+			t.Fatalf("接口查询列缺少 %q: %s", want, interfaceColumns)
+		}
+	}
+	if strings.Contains(interfaceColumns, "i.url") {
+		t.Fatalf("接口查询列不应再依赖 url（已拆分为 scheme/port/path）: %s", interfaceColumns)
 	}
 	if !strings.Contains(productColumns, "p.product_version") {
 		t.Fatalf("产品查询列缺少 product_version: %s", productColumns)
 	}
 	if !strings.Contains(thresholdColumns, "metric") || !strings.Contains(thresholdColumns, "operator") {
 		t.Fatalf("阈值查询列异常: %s", thresholdColumns)
+	}
+}
+
+// TestTaskColumnsIncludeTargetHost 任务查询列必须包含压测目标主机（需求 1）。
+func TestTaskColumnsIncludeTargetHost(t *testing.T) {
+	if !strings.Contains(taskColumns, "COALESCE(target_host, '')") {
+		t.Fatalf("任务查询列缺少 target_host: %s", taskColumns)
 	}
 }
 

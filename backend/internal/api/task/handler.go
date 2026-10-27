@@ -72,12 +72,16 @@ type templateDTO struct {
 
 // interfaceSnapshotDTO 接口范围快照响应（不含认证头值/密文）。
 type interfaceSnapshotDTO struct {
-	InterfaceID string                   `json:"interface_id"`
-	ProductID   string                   `json:"product_id"`
-	ProductName string                   `json:"product_name,omitempty"`
-	Name        string                   `json:"name"`
-	Method      string                   `json:"method"`
-	URL         string                   `json:"url"`
+	InterfaceID string `json:"interface_id"`
+	ProductID   string `json:"product_id"`
+	ProductName string `json:"product_name,omitempty"`
+	Name        string `json:"name"`
+	Method      string `json:"method"`
+	Scheme      string `json:"scheme"`
+	Port        int    `json:"port"`
+	Path        string `json:"path"`
+	// URL 为展示用完整地址（已用任务 target_host 拼接；历史快照保留原值）。
+	URL         string                   `json:"url,omitempty"`
 	Headers     map[string]string        `json:"headers"`
 	AuthHeaders []string                 `json:"auth_headers"`
 	Body        string                   `json:"body,omitempty"`
@@ -103,6 +107,7 @@ type taskDTO struct {
 	Name                   string                 `json:"name"`
 	TemplateID             string                 `json:"template_id,omitempty"`
 	EnvID                  string                 `json:"environment_id"`
+	TargetHost             string                 `json:"target_host"`
 	CreatedBy              string                 `json:"created_by,omitempty"`
 	ProductIDs             []string               `json:"product_ids"`
 	InterfaceIDs           []string               `json:"interface_ids"`
@@ -188,6 +193,7 @@ type taskRequest struct {
 	Name          string          `json:"name" binding:"required"`
 	TemplateID    flexID          `json:"template_id"`
 	EnvironmentID flexID          `json:"environment_id"`
+	TargetHost    string          `json:"target_host"`
 	ProductIDs    idList          `json:"product_ids"`
 	InterfaceIDs  idList          `json:"interface_ids"`
 	Flow          json.RawMessage `json:"flow"`
@@ -345,6 +351,9 @@ func toTaskDTO(v *testsvc.TaskView) taskDTO {
 			ProductName: s.ProductName,
 			Name:        s.Name,
 			Method:      s.Method,
+			Scheme:      s.Scheme,
+			Port:        s.Port,
+			Path:        s.Path,
 			URL:         s.URL,
 			Headers:     headers,
 			AuthHeaders: append([]string{}, s.AuthHeaderNames...),
@@ -379,6 +388,7 @@ func toTaskDTO(v *testsvc.TaskView) taskDTO {
 		Name:                   v.Name,
 		TemplateID:             templateID,
 		EnvID:                  itoa(v.EnvID),
+		TargetHost:             v.TargetHost,
 		CreatedBy:              createdBy,
 		ProductIDs:             itoaList(v.ProductIDs),
 		InterfaceIDs:           itoaList(v.InterfaceIDs),

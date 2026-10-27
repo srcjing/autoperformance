@@ -120,9 +120,15 @@ func TestParsePlan(t *testing.T) {
 		}
 	}
 
-	// 无主机 → ErrNoHost。
-	if _, err := ParsePlan(json.RawMessage(`{"actions":["clean_data"]}`), nil); !errors.Is(err, ErrNoHost) {
-		t.Fatalf("缺少主机应返回 ErrNoHost, got %v", err)
+	// 无主机 + 内置动作 → 无需清理（no-op 成功，空计划）。
+	if plan, err := ParsePlan(json.RawMessage(`{"actions":["clean_data"]}`), nil); err != nil {
+		t.Fatalf("无主机内置动作应成功(no-op), got %v", err)
+	} else if len(plan.Actions) != 0 {
+		t.Fatalf("无主机内置动作应为空计划, got %v", plan.Actions)
+	}
+	// 无主机 + 脚本动作 → ErrNoHost（脚本必须指定可信主机）。
+	if _, err := ParsePlan(json.RawMessage(`{"actions":["script"],"scripts":[{"host_id":1,"path":"/opt/x.sh"}]}`), nil); !errors.Is(err, ErrNoHost) {
+		t.Fatalf("无主机的脚本动作应返回 ErrNoHost, got %v", err)
 	}
 }
 

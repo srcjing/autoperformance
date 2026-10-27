@@ -142,7 +142,9 @@ func bindInterfaceInput(c *gin.Context) (productsvc.InterfaceInput, bool) {
 	return productsvc.InterfaceInput{
 		Name:        req.Name,
 		Method:      req.Method,
-		URL:         req.URL,
+		Scheme:      req.Scheme,
+		Port:        req.Port,
+		Path:        req.Path,
 		Headers:     req.Headers,
 		Body:        body,
 		Timeouts:    timeouts,

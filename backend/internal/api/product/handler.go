@@ -85,7 +85,9 @@ type interfaceDTO struct {
 	ProductID   string            `json:"product_id"`
 	Name        string            `json:"name"`
 	Method      string            `json:"method"`
-	URL         string            `json:"url"`
+	Scheme      string            `json:"scheme"`
+	Port        int               `json:"port"`
+	Path        string            `json:"path"`
 	Headers     map[string]string `json:"headers"`
 	AuthHeaders []string          `json:"auth_headers"`
 	Body        json.RawMessage   `json:"body,omitempty"`
@@ -165,7 +167,9 @@ type timeoutsRequest struct {
 type interfaceRequest struct {
 	Name        string            `json:"name" binding:"required"`
 	Method      string            `json:"method"`
-	URL         string            `json:"url" binding:"required"`
+	Scheme      string            `json:"scheme"`
+	Port        int               `json:"port"`
+	Path        string            `json:"path"`
 	Headers     map[string]string `json:"headers"`
 	Body        json.RawMessage   `json:"body"`
 	Timeouts    *timeoutsRequest  `json:"timeouts"`
@@ -271,7 +275,9 @@ func toInterfaceDTO(v *productsvc.InterfaceView) interfaceDTO {
 		ProductID:   itoa(v.ProductID),
 		Name:        v.Name,
 		Method:      v.Method,
-		URL:         v.URL,
+		Scheme:      v.Scheme,
+		Port:        v.Port,
+		Path:        v.Path,
 		Headers:     headers,
 		AuthHeaders: authHeaders,
 		Timeouts: timeoutsDTO{

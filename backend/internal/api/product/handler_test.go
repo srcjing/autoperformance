@@ -144,7 +144,9 @@ func interfaceView() *productsvc.InterfaceView {
 	now := time.Date(2026, 10, 26, 8, 0, 0, 0, time.UTC)
 	return &productsvc.InterfaceView{
 		ID: 7, ProductID: 3, Name: "创建订单", Method: domain.MethodPost,
-		URL:         "https://api.example.com/orders",
+		Scheme:      domain.SchemeHTTPS,
+		Port:        8443,
+		Path:        "/orders",
 		Headers:     map[string]string{"Content-Type": "application/json"},
 		AuthHeaders: []string{"Authorization"},
 		Body:        `{"sku":"A-1"}`,
@@ -316,7 +318,9 @@ func TestCreateInterfaceParsesPayload(t *testing.T) {
 	body := `{
 		"name": "创建订单",
 		"method": "post",
-		"url": "https://api.example.com/orders",
+		"scheme": "https",
+		"port": 8443,
+		"path": "/orders",
 		"headers": {"Content-Type": "application/json", "Authorization": "Bearer secret-token"},
 		"body": {"sku": "A-1", "qty": 2},
 		"timeouts": {"connect_ms": 1000, "read_ms": 5000},
@@ -342,10 +346,17 @@ func TestCreateInterfaceParsesPayload(t *testing.T) {
 	if !strings.EqualFold(got.Method, "post") {
 		t.Fatalf("method 解析异常: %s", got.Method)
 	}
+	if got.Scheme != "https" || got.Port != 8443 || got.Path != "/orders" {
+		t.Fatalf("接口地址拆分字段解析异常: %+v", got)
+	}
+	data, _ := decodeBody(t, w)["data"].(map[string]any)
+	if data["scheme"] != "https" || data["port"] != float64(8443) || data["path"] != "/orders" {
+		t.Fatalf("接口响应缺少 scheme/port/path: %v", data)
+	}
 
 	// body 非法 JSON 字符串在请求层被拒（10003）。
 	w = doJSON(r, http.MethodPost, "/api/v1/products/3/interfaces",
-		`{"name":"n","url":"https://a.example.com","body":"not-an-object"}`)
+		`{"name":"n","scheme":"https","port":443,"path":"/x","body":"not-an-object"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("JSON 字符串 body 应允许（参数模板可为字符串）: %d %s", w.Code, w.Body.String())
 	}

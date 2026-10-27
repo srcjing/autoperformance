@@ -279,7 +279,9 @@ func TestEndToEndTaskFlow(t *testing.T) {
 	api, err := prodSvc.CreateInterface(ctx, product.ID, productsvc.InterfaceInput{
 		Name:   "查询订单",
 		Method: domain.MethodGet,
-		URL:    "https://order.example.test/api/orders?id=1",
+		Scheme: domain.SchemeHTTPS,
+		Port:   8443,
+		Path:   "/api/orders?id=1",
 		Headers: map[string]string{
 			"X-Trace-Id":    "trace-e2e",
 			"Authorization": "Bearer e2e-secret-token",
@@ -346,8 +348,9 @@ func TestEndToEndTaskFlow(t *testing.T) {
 		t.Fatalf("接口快照数量 = %d, want 1", len(task.InterfaceSnapshots))
 	}
 	snap := task.InterfaceSnapshots[0]
-	if snap.InterfaceID != api.ID || snap.URL == "" || snap.Method != domain.MethodGet {
-		t.Fatalf("接口快照内容异常: %+v", snap)
+	wantURL := "https://10.10.0.11:8443/api/orders?id=1"
+	if snap.InterfaceID != api.ID || snap.URL != wantURL || snap.Method != domain.MethodGet {
+		t.Fatalf("接口快照内容异常: %+v (want url %s)", snap, wantURL)
 	}
 	// INV-7：快照只保存认证头密文，不含明文。
 	if len(snap.AuthHeadersEnc) == 0 {
@@ -378,8 +381,8 @@ func TestEndToEndTaskFlow(t *testing.T) {
 
 	// 脚本生成：接口地址 + 执行期解密的认证头（INV-7 / INV-9）。
 	script := engine.lastScript()
-	if !strings.Contains(script, "https://order.example.test/api/orders") {
-		t.Fatalf("k6 脚本缺少接口地址:\n%s", script)
+	if !strings.Contains(script, "https://10.10.0.11:8443/api/orders?id=1") {
+		t.Fatalf("k6 脚本缺少接口地址（应由 scheme/port/path + 环境 host 拼接）:\n%s", script)
 	}
 	if !strings.Contains(script, "e2e-secret-token") {
 		t.Fatalf("k6 脚本缺少执行期解密的认证头:\n%s", script)
@@ -555,6 +558,7 @@ func createE2ETask(t *testing.T, ctx context.Context, svc *testingsvc.Service,
 	task, err := svc.Create(ctx, testingsvc.CreateTaskInput{
 		Name:         name,
 		EnvID:        envID,
+		TargetHost:   "10.10.0.11",
 		ProductIDs:   []int64{productID},
 		InterfaceIDs: []int64{apiID},
 		Flow:         json.RawMessage(`{"concurrency_mode":"fixed","target_vus":5,"duration":"10s"}`),

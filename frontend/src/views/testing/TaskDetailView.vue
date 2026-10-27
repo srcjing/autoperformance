@@ -74,6 +74,10 @@
           <span>{{ envNames[task.environment_id] ?? `#${task.environment_id}` }}</span>
         </div>
         <div class="summary-item">
+          <span class="summary-label">目标 Host</span>
+          <span>{{ task.target_host || '-' }}</span>
+        </div>
+        <div class="summary-item">
           <span class="summary-label">接口范围</span>
           <span>{{ task.interface_ids.length }} 个</span>
         </div>
@@ -178,7 +182,7 @@
               <td>{{ snapshot.name }}</td>
               <td>{{ snapshot.product_name || `#${snapshot.product_id}` }}</td>
               <td><span class="ap-badge">{{ snapshot.method }}</span></td>
-              <td class="url">{{ snapshot.url }}</td>
+              <td class="url">{{ snapshot.url || '-' }}</td>
               <td>
                 <span v-if="snapshot.auth_headers.length === 0" class="ap-muted">无</span>
                 <span v-else class="ap-chips">

@@ -15,7 +15,7 @@
         <tr v-for="item in interfaces" :key="item.id">
           <td>{{ item.name }}</td>
           <td><span class="ap-badge">{{ item.method }}</span></td>
-          <td class="url">{{ item.url }}</td>
+          <td class="url">{{ formatInterfaceAddress(item) }}</td>
           <td>
             <div v-if="item.auth_headers.length > 0" class="ap-chips">
               <span v-for="header in item.auth_headers" :key="header" class="ap-chip ap-chip-static">
@@ -53,6 +53,7 @@
 
 <script setup lang="ts">
 import type { InterfaceInfo, InterfaceStatus } from '@/types'
+import { formatInterfaceAddress } from '@/utils/format'
 
 // 接口表格。认证头只展示名称并标注「已加密」，不展示任何明文值（DES-I-001）。
 defineProps<{

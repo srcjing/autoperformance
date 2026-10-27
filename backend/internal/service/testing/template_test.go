@@ -112,6 +112,7 @@ func TestCreateTaskFromTemplate(t *testing.T) {
 	task, err := svc.Create(context.Background(), CreateTaskInput{
 		Name:       "基于模板",
 		TemplateID: tpl.ID,
+		TargetHost: "10.20.30.40",
 		CreatedBy:  7,
 	})
 	if err != nil {
