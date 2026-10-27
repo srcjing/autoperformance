@@ -61,6 +61,8 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 
 export const options = {
+  // 压测目标常为内网/自签证书环境，默认跳过 TLS 证书校验（性能测试场景标准做法）。
+  insecureSkipTLSVerify: true,
   scenarios: {
     default: {
 {{- if or (eq .Mode "ramp") (eq .Mode "pulse") }}

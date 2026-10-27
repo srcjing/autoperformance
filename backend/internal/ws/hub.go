@@ -243,11 +243,27 @@ func authorize(perms map[string]bool, channel string) error {
 //
 // 必须在序列化前按值脱敏，而不是对 JSON 文本做正则替换：后者会吞掉引号/花括号导致报文损坏。
 func sanitizeValue(v any) any {
+	return sanitizeValueDepth(v, 0)
+}
+
+// sanitizeMaxDepth 递归深度上限：防止环形引用/超深嵌套导致栈溢出（曾因此崩溃）。
+const sanitizeMaxDepth = 32
+
+func sanitizeValueDepth(v any, depth int) any {
+	if depth > sanitizeMaxDepth {
+		return nil
+	}
 	switch t := v.(type) {
 	case nil:
 		return nil
 	case string:
 		return logutil.SanitizeLog(t)
+	case bool, json.Number,
+		float32, float64,
+		int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64:
+		// 标量直接返回（关键：不得走 JSON 往返，否则 float64/bool 会无限递归）。
+		return v
 	case map[string]string:
 		out := make(map[string]string, len(t))
 		for k, val := range t {
@@ -257,13 +273,13 @@ func sanitizeValue(v any) any {
 	case map[string]any:
 		out := make(map[string]any, len(t))
 		for k, val := range t {
-			out[k] = sanitizeValue(val)
+			out[k] = sanitizeValueDepth(val, depth+1)
 		}
 		return out
 	case []any:
 		out := make([]any, len(t))
 		for i := range t {
-			out[i] = sanitizeValue(t[i])
+			out[i] = sanitizeValueDepth(t[i], depth+1)
 		}
 		return out
 	case []string:
@@ -273,7 +289,7 @@ func sanitizeValue(v any) any {
 		}
 		return out
 	default:
-		// 结构体等复合类型：JSON 往返后按 map/slice 递归脱敏。
+		// 结构体等复合类型：JSON 往返后递归（带深度限制，双保险）。
 		raw, err := json.Marshal(v)
 		if err != nil {
 			return nil
@@ -282,7 +298,7 @@ func sanitizeValue(v any) any {
 		if err := json.Unmarshal(raw, &generic); err != nil {
 			return nil
 		}
-		return sanitizeValue(generic)
+		return sanitizeValueDepth(generic, depth+1)
 	}
 }
 
