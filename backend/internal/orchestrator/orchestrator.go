@@ -296,17 +296,21 @@ func (o *Orchestrator) run(ctx context.Context, taskID int64) error {
 		return err
 	}
 	o.markFinished(ctx, taskID)
+	// 任务成功即释放环境占用（环境可再次使用）；环境释放不依赖清理。
+	o.releaseEnv(ctx, taskID, task.EnvID)
 
-	// 成功自动清理：finished → cleaning → finished（失败则保留现场待确认）
-	if err := o.transition(ctx, taskID, domain.TaskFinished, domain.TaskCleaning); err != nil {
-		return err
-	}
+	// 按需清理（可选附加操作）：接口压测默认不修改环境，未配置动作时直接完成；
+	// 清理失败仅记录，不回退任务成功状态、不影响环境释放。
 	plan, err := o.cleanPlan(ctx, task)
 	if err != nil {
-		o.cleanupFailed(ctx, taskID, err)
+		o.logBackground(taskID, "info", "任务成功；未执行环境清理（"+err.Error()+"）")
 		return nil
 	}
-	o.executeCleanup(ctx, task, plan)
+	if len(plan.Actions) == 0 && len(plan.Scripts) == 0 {
+		o.logBackground(taskID, "info", "任务成功；未配置环境清理动作，跳过清理")
+		return nil
+	}
+	o.runCleanupBestEffort(ctx, task, plan)
 	return nil
 }
 
@@ -576,4 +580,37 @@ func toThresholds(snapshots []domain.ThresholdSnapshot) []evaluator.Threshold {
 		})
 	}
 	return out
+}
+
+// releaseEnv 任务成功后释放环境占用（testing → pending），使环境可再次使用。
+// 与清理解耦：即使清理失败或未配置清理，环境也应释放。
+func (o *Orchestrator) releaseEnv(ctx context.Context, taskID, envID int64) {
+	if envID <= 0 {
+		return
+	}
+	updCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), statusUpdateTimeout)
+	defer cancel()
+	if err := o.store.WithTx(updCtx, func(ctx context.Context, tx repository.Tx) error {
+		return o.store.ReleaseEnvironment(ctx, tx, envID)
+	}); err != nil {
+		o.logBackground(taskID, "error", "释放环境失败: "+err.Error())
+	}
+}
+
+// runCleanupBestEffort 尽力执行可选清理：失败仅记录日志，不改变任务状态。
+func (o *Orchestrator) runCleanupBestEffort(ctx context.Context, task *domain.TestTask, plan *cleaner.Plan) {
+	if o.cleaner == nil {
+		o.logBackground(task.ID, "warn", "清理器未就绪，跳过环境清理（不影响任务结果）")
+		return
+	}
+	res, err := o.cleaner.Run(ctx, plan)
+	if err != nil {
+		o.logBackground(task.ID, "error", "环境清理失败（不影响任务结果）: "+err.Error())
+		return
+	}
+	if !res.OK() {
+		o.logBackground(task.ID, "warn", "环境清理存在失败步骤（不影响任务结果）")
+		return
+	}
+	o.logBackground(task.ID, "info", "环境清理完成")
 }

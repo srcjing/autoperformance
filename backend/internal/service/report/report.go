@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -342,7 +343,7 @@ func (s *Service) generate(ctx context.Context, rep *domain.Report, task *domain
 		return fmt.Errorf("%w: %v", ErrReportGenerateFailed, err)
 	}
 	data := s.buildData(rep, task, fallback)
-	artifacts, err := s.renderArtifacts(ctx, rep, formats, data)
+	artifacts, failedFormats, err := s.renderArtifacts(ctx, rep, formats, data)
 	if err != nil {
 		s.markFailed(ctx, rep.ID)
 		return fmt.Errorf("%w: %v", ErrReportGenerateFailed, err)
@@ -353,6 +354,11 @@ func (s *Service) generate(ctx context.Context, rep *domain.Report, task *domain
 		metrics = nil
 	}
 	summary := data.Summary
+	if len(failedFormats) > 0 {
+		// 部分格式失败：报告仍标记 ready，失败格式记录到 summary 供展示。
+		summary.FailedFormats = failedFormats
+		log.Printf("报告 %d 部分格式生成失败（不影响其他格式）: %v", rep.ID, failedFormats)
+	}
 	err = s.repo.WithTx(ctx, func(ctx context.Context, tx repository.Tx) error {
 		if err := s.repo.UpdateReport(ctx, tx, rep.ID, domain.ReportStatusReady, &summary, metrics); err != nil {
 			return err
@@ -403,11 +409,14 @@ func (s *Service) buildData(rep *domain.Report, task *domain.TestTask, fallback 
 }
 
 // renderArtifacts 按格式渲染产物文件（目录为 <reportDir>/<reportID>，全部由服务端生成）。
+//
+// 各格式独立生成：某一格式失败（如未装 Chromium 导致 PDF 失败）不影响其他格式，
+// 失败格式记入 failed 返回；仅当所有格式均失败时返回错误。
 func (s *Service) renderArtifacts(ctx context.Context, rep *domain.Report, formats []string,
-	data *reportgen.ReportData) ([]domain.ReportArtifact, error) {
+	data *reportgen.ReportData) (artifacts []domain.ReportArtifact, failed []string, err error) {
 	dir := filepath.Join(s.dir, strconv.FormatInt(rep.ID, 10))
 	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return nil, fmt.Errorf("创建报告产物目录失败: %w", err)
+		return nil, nil, fmt.Errorf("创建报告产物目录失败: %w", err)
 	}
 
 	htmlPath := filepath.Join(dir, "report.html")
@@ -415,54 +424,72 @@ func (s *Service) renderArtifacts(ctx context.Context, rep *domain.Report, forma
 	wantPDF := containsFormat(formats, domain.ReportFormatPDF)
 	wantWord := containsFormat(formats, domain.ReportFormatWord)
 
-	artifacts := make([]domain.ReportArtifact, 0, len(formats))
+	artifacts = make([]domain.ReportArtifact, 0, len(formats))
+	htmlOK := false
 	// PDF 由 HTML 打印而来：PDF 单格式时也生成中间 HTML（打印后删除）。
 	if wantHTML || wantPDF {
-		size, err := s.writeArtifact(htmlPath, func(w io.Writer) error {
+		size, herr := s.writeArtifact(htmlPath, func(w io.Writer) error {
 			return s.renderHTML(w, data)
 		})
-		if err != nil {
-			return nil, err
-		}
-		if wantHTML {
-			artifacts = append(artifacts, newArtifact(rep.ID, domain.ReportFormatHTML, htmlPath, size))
+		if herr != nil {
+			log.Printf("报告 HTML 渲染失败: %v", herr)
+			failed = append(failed, domain.ReportFormatHTML)
+			if wantPDF {
+				failed = append(failed, domain.ReportFormatPDF)
+			}
+		} else {
+			htmlOK = true
+			if wantHTML {
+				artifacts = append(artifacts, newArtifact(rep.ID, domain.ReportFormatHTML, htmlPath, size))
+			}
 		}
 	}
 
-	if wantPDF {
+	if wantPDF && htmlOK {
 		if s.pdf == nil {
-			return nil, fmt.Errorf("PDF 生成器未配置")
+			log.Printf("报告 PDF 生成器未配置，跳过 PDF")
+			failed = append(failed, domain.ReportFormatPDF)
+		} else {
+			pdfPath := filepath.Join(dir, "report.pdf")
+			if perr := s.pdf.Generate(ctx, htmlPath, pdfPath); perr != nil {
+				log.Printf("报告 PDF 生成失败: %v", perr)
+				failed = append(failed, domain.ReportFormatPDF)
+			} else if psize, serr := fileSize(pdfPath); serr != nil {
+				log.Printf("报告 PDF 产物读取失败: %v", serr)
+				failed = append(failed, domain.ReportFormatPDF)
+			} else {
+				artifacts = append(artifacts, newArtifact(rep.ID, domain.ReportFormatPDF, pdfPath, psize))
+			}
 		}
-		pdfPath := filepath.Join(dir, "report.pdf")
-		if err := s.pdf.Generate(ctx, htmlPath, pdfPath); err != nil {
-			return nil, err
-		}
-		size, err := fileSize(pdfPath)
-		if err != nil {
-			return nil, err
-		}
-		artifacts = append(artifacts, newArtifact(rep.ID, domain.ReportFormatPDF, pdfPath, size))
 	}
 
 	if wantWord {
 		if s.renderWord == nil {
-			return nil, fmt.Errorf("Word 生成器未配置")
+			log.Printf("报告 Word 生成器未配置，跳过 Word")
+			failed = append(failed, domain.ReportFormatWord)
+		} else {
+			wordPath := filepath.Join(dir, "report.docx")
+			wsize, werr := s.writeArtifact(wordPath, func(w io.Writer) error {
+				return s.renderWord(w, data)
+			})
+			if werr != nil {
+				log.Printf("报告 Word 生成失败: %v", werr)
+				failed = append(failed, domain.ReportFormatWord)
+			} else {
+				artifacts = append(artifacts, newArtifact(rep.ID, domain.ReportFormatWord, wordPath, wsize))
+			}
 		}
-		wordPath := filepath.Join(dir, "report.docx")
-		size, err := s.writeArtifact(wordPath, func(w io.Writer) error {
-			return s.renderWord(w, data)
-		})
-		if err != nil {
-			return nil, err
-		}
-		artifacts = append(artifacts, newArtifact(rep.ID, domain.ReportFormatWord, wordPath, size))
 	}
 
 	// PDF 单格式：中间 HTML 不对外暴露，打印后立即删除。
-	if !wantHTML && wantPDF {
+	if !wantHTML && wantPDF && htmlOK {
 		_ = os.Remove(htmlPath)
 	}
-	return artifacts, nil
+
+	if len(artifacts) == 0 {
+		return nil, failed, fmt.Errorf("所有报告格式均生成失败: %v", failed)
+	}
+	return artifacts, failed, nil
 }
 
 // writeArtifact 原子写产物（先写 .tmp 再 rename；权限 0640，禁止可执行）。

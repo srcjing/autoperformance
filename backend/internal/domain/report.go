@@ -91,6 +91,8 @@ type ReportSummary struct {
 	Metrics          map[string]float64  `json:"metrics,omitempty"`
 	Items            []ReportSummaryItem `json:"items,omitempty"`
 	MissingMetrics   []string            `json:"missing_metrics,omitempty"`
+	// FailedFormats 生成失败的格式列表（部分成功时非空；不影响其他格式可用）。
+	FailedFormats []string `json:"failed_formats,omitempty"`
 	// OriginalFilename/SHA256/SizeBytes 仅用于导入归档（溯源与审计，DES-R-001）。
 	OriginalFilename string `json:"original_filename,omitempty"`
 	SHA256           string `json:"sha256,omitempty"`

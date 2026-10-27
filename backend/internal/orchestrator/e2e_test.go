@@ -369,14 +369,13 @@ func TestEndToEndTaskFlow(t *testing.T) {
 	}
 	final := waitTaskStatus(t, store, task.ID, domain.TaskFinished)
 
+	// 接口压测默认无需清理（无清理主机时内置动作 no-op），任务直接 finished 并释放环境。
 	assertTransitions(t, store, []string{
 		"pending->running",
 		"running->collecting",
 		"collecting->evaluating",
 		"evaluating->generating",
 		"generating->finished",
-		"finished->cleaning", // 成功自动清理
-		"cleaning->finished",
 	})
 
 	// 脚本生成：接口地址 + 执行期解密的认证头（INV-7 / INV-9）。

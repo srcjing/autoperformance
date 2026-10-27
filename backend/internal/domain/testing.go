@@ -505,9 +505,7 @@ func ParseCleanConfig(raw json.RawMessage) (json.RawMessage, *CleanConfig, error
 			return nil, nil, fmt.Errorf("%w: 清理脚本哈希非法", ErrInvalidCleanConfig)
 		}
 	}
-	if len(actions) == 0 && len(cfg.Scripts) == 0 {
-		return nil, nil, fmt.Errorf("%w: 清理动作与脚本均为空", ErrInvalidCleanConfig)
-	}
+	// 允许动作与脚本均为空：表示不执行环境清理（接口压测默认场景，无需清理）。
 
 	timing := strings.ToLower(strings.TrimSpace(cfg.Timing))
 	if timing == "" {

@@ -166,6 +166,8 @@ func TestArtifactNotFound(t *testing.T) {
 func TestRegenerateMarksFailed(t *testing.T) {
 	repo := newFakeReportRepo()
 	task := sampleTask(9)
+	// 仅 PDF 格式：PDF 失败即全部格式失败 → 报告 generation_failed。
+	task.ReportConfig = []byte(`{"formats":["pdf"]}`)
 	repo.tasks[9] = task
 	repo.reports[1] = &domain.Report{
 		ID: 1, TaskID: 9, Source: domain.ReportSourceInternal,

@@ -199,10 +199,10 @@ export function createDefaultReportConfig(): ReportConfig {
   return { formats: ['html', 'pdf', 'word'] }
 }
 
-/** 默认清理配置（至少一个动作，避免后端 10003）。 */
-export function createDefaultCleanConfig(): CleanConfig {
-  return { actions: ['restore_config', 'clean_data'], scripts: [], timing: 'auto' }
-}
+	/** 默认清理配置：默认不选任何动作（接口压测默认不修改环境，无需清理）。 */
+	export function createDefaultCleanConfig(): CleanConfig {
+		return { actions: [], scripts: [], timing: 'auto' }
+	}
 
 /** 归一化准备阶段配置（历史数据可能缺字段）。 */
 function normalizePreparation(raw: unknown): FlowPreparationConfig {
@@ -347,10 +347,7 @@ export function validateReportConfig(config: ReportConfig): string {
 
 /** 清理配置校验（返回空串表示通过）。 */
 export function validateCleanConfig(config: CleanConfig): string {
-  const actions = config.actions.filter((action) => action !== 'script')
-  if (actions.length === 0 && config.scripts.length === 0) {
-    return '至少选择一个清理动作或一条清理脚本'
-  }
+  // 允许不选任何动作：表示不执行环境清理（接口压测默认场景）。
   if (config.scripts.length > 10) return '清理脚本不能超过 10 条'
   for (const [index, script] of config.scripts.entries()) {
     if (!script.host_id) return `第 ${index + 1} 条清理脚本需选择可信主机`

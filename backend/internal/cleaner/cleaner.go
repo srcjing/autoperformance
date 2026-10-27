@@ -182,7 +182,8 @@ func ParsePlan(raw json.RawMessage, hosts []int64) (*Plan, error) {
 		})
 	}
 	if len(plan.Actions) == 0 && len(plan.Scripts) == 0 {
-		return nil, fmt.Errorf("%w: 清理计划为空", ErrInvalidPlan)
+		// 未配置任何清理动作/脚本：合法（无操作，表示不清理；接口压测默认场景）。
+		return plan, nil
 	}
 	if len(plan.Actions)+len(plan.Scripts) > maxActionSteps {
 		return nil, fmt.Errorf("%w: 清理步骤超限", ErrInvalidPlan)

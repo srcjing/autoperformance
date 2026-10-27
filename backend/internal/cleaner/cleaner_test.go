@@ -113,7 +113,6 @@ func TestParsePlan(t *testing.T) {
 		`{"actions":["script"]}`,
 		`{"actions":["clean_data"],"scripts":[{"host_id":1,"path":"/opt/../etc/passwd"}]}`,
 		`{"actions":["clean_data"],"scripts":[{"host_id":1,"path":"/opt/x.sh;id;"}]}`,
-		`{"actions":[]}`,
 	} {
 		if _, err := ParsePlan(json.RawMessage(raw), []int64{1}); err == nil {
 			t.Fatalf("非法配置应被拒绝: %s", raw)
