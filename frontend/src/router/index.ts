@@ -31,10 +31,11 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
-    redirect: '/environments/list',
+    redirect: '/overview',
     meta: { requiresAuth: true },
     children: [
       // 环境管理
+      { path: 'overview', name: 'overview', component: () => import('@/views/OverviewView.vue'), meta: { title: '概览' } },
       { path: 'environments/list', name: 'environment-list', component: () => import('@/views/environment/EnvironmentListView.vue'), meta: { title: '环境列表', module: 'env.list' } },
       { path: 'environments/tags', name: 'tag-list', component: () => import('@/views/environment/TagListView.vue'), meta: { title: '标签维护', module: 'env.tag' } },
       // 产品管理

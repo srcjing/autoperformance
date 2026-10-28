@@ -4,17 +4,23 @@
     <aside class="sidebar">
       <div class="logo">auto_performance</div>
       <nav class="nav">
+        <RouterLink to="/overview" class="nav-item nav-single" active-class="active">概览</RouterLink>
         <div v-for="group in visibleNavGroups" :key="group.title" class="nav-group">
-          <div class="nav-group-title">{{ group.title }}</div>
-          <RouterLink
-            v-for="item in group.children"
-            :key="item.path"
-            :to="item.path"
-            class="nav-item"
-            active-class="active"
-          >
-            {{ item.label }}
-          </RouterLink>
+          <button type="button" class="nav-group-title" @click="toggleGroup(group.title)">
+            <span>{{ group.title }}</span>
+            <span class="caret" :class="{ collapsed: collapsedGroups.has(group.title) }">▾</span>
+          </button>
+          <div v-show="!collapsedGroups.has(group.title)" class="nav-items">
+            <RouterLink
+              v-for="item in group.children"
+              :key="item.path"
+              :to="item.path"
+              class="nav-item"
+              active-class="active"
+            >
+              {{ item.label }}
+            </RouterLink>
+          </div>
         </div>
         <p v-if="visibleNavGroups.length === 0" class="nav-empty">暂无可访问的功能</p>
       </nav>
@@ -40,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, reactive } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import type { PermissionLevel } from '@/utils/permission'
@@ -116,6 +122,13 @@ const visibleNavGroups = computed<NavGroup[]>(() =>
     .filter((group) => group.children.length > 0),
 )
 
+// 一级模块折叠状态（同原型：点击分组标题收起/展开子模块）。
+const collapsedGroups = reactive(new Set<string>())
+function toggleGroup(title: string): void {
+  if (collapsedGroups.has(title)) collapsedGroups.delete(title)
+  else collapsedGroups.add(title)
+}
+
 const currentTitle = computed(() => (route.meta.title as string) || '')
 const displayName = computed(() => auth.user?.name || auth.user?.username || '未登录')
 
@@ -156,11 +169,39 @@ async function onLogout(): Promise<void> {
 }
 
 .nav-group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
   padding: 12px 16px 6px;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: #6b7280;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.nav-group-title:hover {
+  color: #9ca3af;
+}
+.caret {
+  font-size: 11px;
+  transition: transform 0.2s;
+  color: #6b7280;
+}
+.caret.collapsed {
+  transform: rotate(-90deg);
+}
+.nav-single {
+  padding-left: 16px;
+  margin-bottom: 4px;
+}
+.nav-items {
+  display: flex;
+  flex-direction: column;
 }
 
 .nav-item {
