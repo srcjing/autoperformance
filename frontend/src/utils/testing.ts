@@ -175,6 +175,25 @@ export function formatMetricValue(value: number | null | undefined, digits = 2):
   return value.toFixed(digits)
 }
 
+/** 流程步骤作用域展示文案（前端展示/任务详情统一口径）。 */
+export const FLOW_SCOPE_LABELS: Record<FlowStepScope, string> = {
+  once_per_test: '前置（整周期一次）',
+  once_per_iteration: '主流程（每迭代）',
+  every_request: '每请求前置',
+}
+
+/** 提取占位符正则（与 k6 脚本一致）。 */
+export const FLOW_VAR_RE = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g
+
+/** 从文本中解析引用的变量名（路径/请求头/请求体）。 */
+export function referencedVars(texts: string[]): string[] {
+  const names = new Set<string>()
+  for (const text of texts) {
+    for (const match of text.matchAll(FLOW_VAR_RE)) names.add(match[1])
+  }
+  return [...names]
+}
+
 /** 默认流程配置（"可用即可执行" 的最小示例，避免用户面对空表单）。 */
 export function createDefaultFlow(): FlowConfig {
   return {

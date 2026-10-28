@@ -50,6 +50,8 @@ type scriptStep struct {
 	Body            string
 	InterfaceIDText string
 	ExtractJSON     string
+	// Label 步骤标签（如「第 1 步（登录）」），用于变量告警定位。
+	Label string
 }
 
 // scriptStage 模板中的加压档位。
@@ -199,10 +201,22 @@ const THINK_TIME = {{ .ThinkTimeSeconds }};
 const CAPTURE_BODY = {{ .CaptureResponseBody }};
 const VAR_PATTERN = {{ js .VarPattern }};
 
-// 将步骤字符串中的变量占位符替换为运行期变量值。
-function render(tpl, vars) {
+// 变量/提取异常告警：每个（步骤+变量）只报一次，服务端 丢弃重复并落测试日志。
+const WARNED = {};
+function warn(key, message) {
+  if (WARNED[key]) { return; }
+  WARNED[key] = 1;
+  try { console.log('AFWARN|' + JSON.stringify({ k: key, m: message })); } catch (e) { /* 忽略 */ }
+}
+
+// 将步骤字符串中的变量占位符替换为运行期变量值（缺失时告警并按空串发送）。
+function render(tpl, vars, label) {
   return String(tpl).replace(new RegExp(VAR_PATTERN, 'g'), function (m, key) {
-    return (vars[key] === undefined || vars[key] === null) ? '' : String(vars[key]);
+    if (vars[key] === undefined || vars[key] === null) {
+      warn(label + ':' + key, label + ' 引用变量 ' + key + ' 未定义，已按空值发送');
+      return '';
+    }
+    return String(vars[key]);
   });
 }
 
@@ -240,19 +254,23 @@ function extractValue(res, rule) {
   }
 }
 
-function applyExtract(res, rules, vars) {
+function applyExtract(res, rules, vars, label) {
   if (!rules || !rules.length) { return; }
   for (var i = 0; i < rules.length; i++) {
     var value = extractValue(res, rules[i]);
-    if (value !== undefined && value !== null) { vars[rules[i].name] = value; }
+    if (value === undefined || value === null) {
+      warn(label + ':' + rules[i].name, label + ' 变量 ' + rules[i].name + ' 提取失败（' + rules[i].source + '=' + rules[i].expr + '）');
+      continue;
+    }
+    vars[rules[i].name] = value;
   }
 }
 
 function send(step, vars) {
   var headers = {};
-  for (var key in step.headers) { headers[key] = render(step.headers[key], vars); }
-  var url = render(step.url, vars);
-  var body = step.body ? render(step.body, vars) : null;
+  for (var key in step.headers) { headers[key] = render(step.headers[key], vars, step.label); }
+  var url = render(step.url, vars, step.label);
+  var body = step.body ? render(step.body, vars, step.label) : null;
   var params = { headers: headers, tags: { interface_id: step.interfaceId } };
   if (REQUEST_TIMEOUT) { params.timeout = REQUEST_TIMEOUT; }
   var res;
@@ -281,7 +299,7 @@ function send(step, vars) {
 function runSteps(steps, vars) {
   for (var i = 0; i < steps.length; i++) {
     var res = send(steps[i], vars);
-    applyExtract(res, steps[i].extract, vars);
+    applyExtract(res, steps[i].extract, vars, steps[i].label);
   }
 }
 
@@ -294,6 +312,7 @@ const SETUP_STEPS = [
     headers: {{ .Headers }},
     body: {{ js .Body }},
     interfaceId: {{ js .InterfaceIDText }},
+    label: {{ js .Label }},
     extract: {{ .ExtractJSON }},
   },
 {{- end }}
@@ -307,6 +326,7 @@ const MAIN_STEPS = [
     headers: {{ .Headers }},
     body: {{ js .Body }},
     interfaceId: {{ js .InterfaceIDText }},
+    label: {{ js .Label }},
     extract: {{ .ExtractJSON }},
   },
 {{- end }}
@@ -320,6 +340,7 @@ const PRE_STEPS = [
     headers: {{ .Headers }},
     body: {{ js .Body }},
     interfaceId: {{ js .InterfaceIDText }},
+    label: {{ js .Label }},
     extract: {{ .ExtractJSON }},
   },
 {{- end }}
@@ -338,7 +359,7 @@ export default function (data) {
   for (var i = 0; i < MAIN_STEPS.length; i++) {
     if (PRE_STEPS.length > 0) { runSteps(PRE_STEPS, vars); }
     var res = send(MAIN_STEPS[i], vars);
-    applyExtract(res, MAIN_STEPS[i].extract, vars);
+    applyExtract(res, MAIN_STEPS[i].extract, vars, MAIN_STEPS[i].label);
   }
   if (THINK_TIME > 0) { sleep(THINK_TIME); }
 }
@@ -459,6 +480,10 @@ func buildFlowSteps(steps []domain.FlowStep, interfaces []domain.InterfaceSnapsh
 			}
 			extractJSON = string(raw)
 		}
+		label := fmt.Sprintf("第 %d 步", st.Seq)
+		if name := strings.TrimSpace(st.Name); name != "" {
+			label = fmt.Sprintf("第 %d 步（%s）", st.Seq, name)
+		}
 		item := scriptStep{
 			Method:          req.Method,
 			URL:             req.URL,
@@ -466,6 +491,7 @@ func buildFlowSteps(steps []domain.FlowStep, interfaces []domain.InterfaceSnapsh
 			Body:            body,
 			InterfaceIDText: req.InterfaceIDText,
 			ExtractJSON:     extractJSON,
+			Label:           label,
 		}
 		switch st.Scope {
 		case domain.ScopeOncePerTest:

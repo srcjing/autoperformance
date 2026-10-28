@@ -23,3 +23,4 @@
 | 2026-10-26 | 新增 | 实现 | 按 plan.md 完成全部 10 个 Phase 实现（基础设施/认证分权/环境/产品/测试管理/报告/日志/系统设置/部署打包/联调安全加固），后端 go build/vet/test 与前端 type-check/build 全绿；dev 分支 | `specs/plan.md`、`backend/`、`frontend/`、`deploy/` | dev |
 | 2026-10-28 | 新增 | 测试管理 | 新增测试模式（单接口 `single` / 流程 `flow`）与流程编排：步骤顺序、接口引用、路径/请求头/请求体覆盖、响应变量提取（JSONPath/正则）；步骤作用域三档（once_per_test / once_per_iteration / every_request）对应登录取凭证、主流程流量、每请求刷新；k6 脚本按作用域生成 setup/主流程/每请求前置；前端新增流程步骤编辑器 | `prds/PRD-performance-testing-platform.md` §3.3.6.1、`specs/api-contract.md` §2.4 | dev |
 | 2026-10-28 | 修正 | 测试管理/前端 | 流程编辑体验：可用变量改为可点击 chip（插入光标处）、路径/请求体引用变量高亮、请求头改 Postman 式键值行（接口表单）；新增任务快照同步（待执行任务执行前自动刷新 + 手动 refresh-snapshot），接口配置变更后任务/模板展示与执行同步生效 | `prds/PRD-performance-testing-platform.md`、`specs/api-contract.md` | dev |
+| 2026-10-28 | 修正 | 测试管理 | 流程变量排查能力：k6 输出 AFWARN 行，变量未定义/提取失败写入测试日志（去重 + 上限 100）；前端步骤编辑器对未定义变量红色提示；任务详情新增「流程步骤」表（顺序/接口/作用域/提取/引用） | `specs/api-contract.md` | dev |

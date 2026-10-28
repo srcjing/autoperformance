@@ -164,6 +164,33 @@
       </div>
 
       <div class="ap-card">
+        <h3 class="cfg-title">流程步骤（{{ flowSteps.length }} 步）</h3>
+        <table v-if="flowSteps.length > 0" class="ap-table">
+          <thead>
+            <tr>
+              <th>顺序</th>
+              <th>步骤</th>
+              <th>接口</th>
+              <th>作用域</th>
+              <th>变量提取</th>
+              <th>引用变量</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="step in flowSteps" :key="step.seq">
+              <td>{{ step.seq }}</td>
+              <td>{{ step.name || '-' }}</td>
+              <td>{{ interfaceLabel(step.interface_id) }}</td>
+              <td><span class="ap-badge">{{ scopeLabel(step) }}</span></td>
+              <td>{{ extractSummary(step) }}</td>
+              <td>{{ usedVarSummary(step) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else class="ap-table-empty">单接口测试（无流程步骤）</p>
+      </div>
+
+      <div class="ap-card">
         <div class="snapshot-head">
           <h3 class="cfg-title">接口范围快照（待执行任务可同步最新接口配置）</h3>
           <button
@@ -270,15 +297,17 @@ import { formatDateTime } from '@/utils/format'
 import { metricLabel } from '@/utils/threshold'
 import {
   CLEAN_ACTION_OPTIONS,
+  FLOW_SCOPE_LABELS,
   canCancelTask,
   canCleanupTask,
   canRetryTask,
   canStartTask,
   describeTaskError,
   isActiveTaskStatus,
+  referencedVars,
   taskStatusMeta,
 } from '@/utils/testing'
-import type { TaskEvaluation } from '@/types'
+import type { FlowStepPayload, TaskEvaluation } from '@/types'
 
 // 任务详情页（PRD §3.3 任务执行/监控）：阶段进度 + 实时日志 + 指标判定 + 快照回看。
 // 实时数据由 useTaskStore.attachRealtime（内部 useWebSocket → task:{id}）写入；
@@ -304,6 +333,31 @@ const evaluation = computed<TaskEvaluation | null>(
   () => store.liveEvaluation ?? task.value?.result?.evaluation ?? null,
 )
 const durationSeconds = computed(() => task.value?.result?.duration_seconds ?? 0)
+
+// 流程步骤（flow 模式；单接口模式为空）。
+const flowSteps = computed<FlowStepPayload[]>(() => task.value?.flow?.steps ?? [])
+
+function interfaceLabel(interfaceId: number): string {
+  const id = String(interfaceId)
+  const snapshot = task.value?.interface_range_snapshot.find((item) => item.interface_id === id)
+  return snapshot ? snapshot.name : `接口 #${id}`
+}
+
+function scopeLabel(step: FlowStepPayload): string {
+  return FLOW_SCOPE_LABELS[step.scope] ?? step.scope
+}
+
+function extractSummary(step: FlowStepPayload): string {
+  const rules = step.extract ?? []
+  if (rules.length === 0) return '-'
+  return rules.map((rule) => `${rule.name} ← ${rule.expr}`).join('；')
+}
+
+function usedVarSummary(step: FlowStepPayload): string {
+  const headerText = Object.values(step.headers ?? {}).join(' ')
+  const names = referencedVars([step.path ?? '', step.body ?? '', headerText])
+  return names.length > 0 ? names.join('、') : '-'
+}
 
 const concurrencyText = computed(() => {
   const flow = task.value?.flow

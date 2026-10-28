@@ -112,3 +112,17 @@ func TestRecordRequestLogsSwallowsError(t *testing.T) {
 		t.Fatalf("写入失败应留下测试日志线索: %v", store.logs)
 	}
 }
+
+// TestParseFlowWarning 解析 k6 输出的步骤告警行。
+func TestParseFlowWarning(t *testing.T) {
+	fw, ok := parseFlowWarning(`AFWARN|{"k":"第 2 步（业务）:token","m":"第 2 步（业务） 引用变量 token 未定义，已按空值发送"}`)
+	if !ok || fw.Key == "" || !strings.Contains(fw.Message, "token") {
+		t.Fatalf("告警解析失败: %+v ok=%v", fw, ok)
+	}
+	if _, ok := parseFlowWarning(`AFREQ|{"i":"1"}`); ok {
+		t.Fatal("非告警行不应解析成功")
+	}
+	if _, ok := parseFlowWarning(`AFWARN|{"k":"x","m":"  "}`); ok {
+		t.Fatal("空消息不应写入日志")
+	}
+}

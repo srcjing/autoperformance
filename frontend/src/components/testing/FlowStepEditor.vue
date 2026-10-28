@@ -88,6 +88,10 @@
         </template>
       </div>
 
+      <p v-if="missingVars(index, step).length > 0" class="var-missing">
+        ⚠ 未定义变量：{{ missingVars(index, step).join('、') }}（前序步骤未提取，执行时会按空值发送，并写入测试日志警告）
+      </p>
+
       <div class="step-grid">
         <label class="ap-field">
           <span class="ap-field-label">路径覆盖（可选，留空用接口默认路径）</span>
@@ -371,6 +375,12 @@ function usedVars(step: FlowStep): string[] {
   return [...names]
 }
 
+/** 本步引用但前序步骤未提供的变量（保存前提示，避免静默空值）。 */
+function missingVars(index: number, step: FlowStep): string[] {
+  const available = new Set(availableVars(index))
+  return usedVars(step).filter((name) => !available.has(name))
+}
+
 /** 文本 → 分段（普通文本 / 变量占位符），用于高亮展示。 */
 function segments(text: string): { text: string; variable: boolean; name: string }[] {
   const out: { text: string; variable: boolean; name: string }[] = []
@@ -508,6 +518,15 @@ function parseHeaderText(text: string): Record<string, string> {
 }
 .used-label {
   margin-left: 8px;
+}
+.var-missing {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #fff4f4;
+  border: 1px solid #f3c2c2;
+  color: #b42318;
+  font-size: 12px;
 }
 .var-preview {
   display: block;

@@ -34,7 +34,7 @@ func flowSpec() ScriptSpec {
 			Timeout:         "5s",
 			TestMode:        domain.TestModeFlow,
 			Steps: []domain.FlowStep{
-				{Seq: 1, InterfaceID: 1, Scope: domain.ScopeOncePerTest, Extract: []domain.ExtractRule{
+				{Seq: 1, Name: "登录", InterfaceID: 1, Scope: domain.ScopeOncePerTest, Extract: []domain.ExtractRule{
 					{Name: "token", Source: domain.ExtractSourceJSONPath, Expr: "$.data.token"},
 				}},
 				{Seq: 2, InterfaceID: 3, Scope: domain.ScopeEveryRequest, Extract: []domain.ExtractRule{
@@ -96,5 +96,24 @@ func TestBuildSingleScriptUnchanged(t *testing.T) {
 	}
 	if strings.Contains(script, "export function setup()") {
 		t.Fatalf("单接口模式不应生成 setup")
+	}
+}
+
+// TestFlowScriptEmitsVariableWarnings 流程脚本带变量告警与步骤标签（排查变量未定义/提取失败）。
+func TestFlowScriptEmitsVariableWarnings(t *testing.T) {
+	script, err := BuildScript(flowSpec())
+	if err != nil {
+		t.Fatalf("生成流程脚本失败: %v", err)
+	}
+	for _, want := range []string{
+		"AFWARN|",
+		`label: "第 1 步（登录）"`,
+		`label: "第 3 步"`,
+		"未定义，已按空值发送",
+		"提取失败（",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("流程脚本缺少 %q", want)
+		}
 	}
 }

@@ -266,7 +266,21 @@ func (o *Orchestrator) run(ctx context.Context, taskID int64) error {
 	// 用作请求详情（含 response_body）。未开启时 captured 为空，回退用 result.json 还原。
 	var captureMu sync.Mutex
 	var captured []capturedRequest
+	// 步骤告警去重（同一变量只记一条）+ 总条数上限。
+	flowWarned := make(map[string]bool)
 	if err := o.runner.Run(ctx, scriptPath, resultPath, func(line string) {
+		if fw, ok := parseFlowWarning(line); ok {
+			captureMu.Lock()
+			dup := flowWarned[fw.Key] || len(flowWarned) >= maxFlowWarnings
+			if !dup {
+				flowWarned[fw.Key] = true
+			}
+			captureMu.Unlock()
+			if !dup {
+				o.log(ctx, taskID, "warn", "流程变量告警: "+fw.Message)
+			}
+			return
+		}
 		if strings.HasPrefix(line, afreqPrefix) {
 			if cr, ok := parseCapturedRequest(line); ok {
 				captureMu.Lock()

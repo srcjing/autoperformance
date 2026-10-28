@@ -14,6 +14,10 @@ import (
 const (
 	// afreqPrefix k6 脚本采集响应体时输出的行前缀（见 engine/k6/script.go）。
 	afreqPrefix = "AFREQ|"
+	// afwarnPrefix 流程变量/提取异常告警行前缀（服务端转写测试日志）。
+	afwarnPrefix = "AFWARN|"
+	// maxFlowWarnings 单任务写入测试日志的步骤告警上限（防刷屏）。
+	maxFlowWarnings = 100
 	// maxCapturedRequests 单任务从 stdout 收集的明细上限（防内存/日志爆炸）。
 	maxCapturedRequests = 5000
 )
@@ -40,6 +44,24 @@ func parseCapturedRequest(line string) (capturedRequest, bool) {
 		return cr, false
 	}
 	return cr, true
+}
+
+// flowWarning k6 脚本输出的步骤告警（变量未定义 / 提取失败）。
+type flowWarning struct {
+	Key     string `json:"k"`
+	Message string `json:"m"`
+}
+
+// parseFlowWarning 解析 AFWARN 行。
+func parseFlowWarning(line string) (flowWarning, bool) {
+	var fw flowWarning
+	if !strings.HasPrefix(line, afwarnPrefix) {
+		return fw, false
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(line[len(afwarnPrefix):])), &fw); err != nil {
+		return fw, false
+	}
+	return fw, strings.TrimSpace(fw.Message) != ""
 }
 
 // ifaceMeta 接口快照中最小的请求详情字段（接口 ID + 请求入参）。
