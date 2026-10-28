@@ -14,6 +14,8 @@
           </button>
         </div>
 
+        <section class="form-section">
+          <h4 class="section-title">1. 基本信息</h4>
         <div class="ap-form-row">
           <label class="ap-field">
             <span class="ap-field-label">接口名称 *</span>
@@ -60,26 +62,35 @@
           接口不配置 host：创建测试任务时从所选环境的 hosts 中任选一个作为压测 host，
           完整地址 = 协议://host:端口 + 路径。
         </p>
+        </section>
 
+        <section class="form-section">
+          <h4 class="section-title">2. 请求头</h4>
         <div class="ap-field">
-          <HeaderRowsEditor v-model="headers" :disabled="saving" label="请求头（Postman 方式：勾选启用 / 键 / 值）" />
+          <HeaderRowsEditor v-model="headers" :disabled="saving" label="请求头（勾选启用 / 键 / 值，可粘贴识别）" />
         </div>
         <p class="ap-alert ap-alert-hint">
           认证头（Authorization / Token / Cookie / X-Api-Key 等）由服务端 AES-256-GCM 加密保存，页面与接口响应均不展示明文。
-          编辑时认证头名保持留空即沿用已保存的值；删除该行即删除该认证头。
+          编辑时认证头值留空即沿用已保存的值；删除该行即删除该认证头。
         </p>
+        </section>
 
+        <section class="form-section">
+          <h4 class="section-title">3. 请求体</h4>
         <div class="ap-field">
           <BodyRowsEditor
             v-model="bodyText"
             :disabled="saving"
-            label="请求体（键值行，路径支持嵌套如 attrs.ouId / list[0].id）"
+            label="请求体参数（点「+ 嵌套」添加子级参数）"
           />
           <span class="ap-muted">
             流程测试中请求体 / 路径可用占位符（如 <code v-pre>{{token}}</code>）引用上一步提取的变量。
           </span>
         </div>
+        </section>
 
+        <section class="form-section">
+          <h4 class="section-title">4. 超时与描述</h4>
         <div class="ap-form-row">
           <label class="ap-field">
             <span class="ap-field-label">建连超时（ms）</span>
@@ -99,6 +110,7 @@
           <span class="ap-field-label">描述</span>
           <textarea v-model="description" :disabled="saving" rows="2" maxlength="500" />
         </label>
+        </section>
 
         <p v-if="displayError" class="ap-alert ap-alert-error" role="alert">{{ displayError }}</p>
         <p v-else-if="isEdit" class="ap-alert ap-alert-hint">
@@ -314,6 +326,23 @@ function onSubmit(): void {
 .path-field {
   flex: 1 1 220px;
   min-width: 200px;
+}
+.form-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #fff;
+}
+.form-section .section-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #eef2f7;
 }
 .import-bar {
   display: flex;

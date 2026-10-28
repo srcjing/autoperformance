@@ -1,24 +1,41 @@
-// 请求体「路径键值行」与 JSON 的互转（支持嵌套对象与数组）。
+// 请求体「缩进键值行」与 JSON 的互转。
 //
-// 设计：一行 = 一个叶子值，路径用 `a.b` / `list[0].id` 表达层级；
-// 空对象/空数组用类型 `json` 整值表达（如 `{}` / `[]`）。
+// 行是有层级的数据：容器行（对象/数组）承载子级，叶子行（字符串/数字/布尔/null）承载值；
+// 层级由 depth 表达（0 为根层），由「+ 嵌套」按钮在容器行下生成子级行。
+// 数组元素行用 `[0]` 形式的键名表示。
 
-/** 值类型（决定生成 JSON 时的字面量形态）。 */
-export type BodyValueType = 'string' | 'number' | 'boolean' | 'null' | 'json'
+/** 值类型。 */
+export type BodyValueType =
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'null'
+  | 'object'
+  | 'array'
+  // json：JSON 片段整值（兼容手工填写 `{}` / `[]` 等）
+  | 'json'
 
 /** 请求体表格中的一行。 */
 export interface BodyRow {
-  path: string
+  /** 键名（数组元素写 `[0]`）。 */
+  key: string
   value: string
   type: BodyValueType
+  /** 嵌套层级：0 为根层，n 为上一层容器的子键。 */
+  depth: number
   enabled: boolean
 }
 
-/** 路径 → 访问令牌序列（对象键为 string，数组下标为 number）。 */
-export function parsePath(path: string): (string | number)[] {
+/** 是否容器行（对象/数组）。 */
+export function isContainer(row: BodyRow): boolean {
+  return row.type === 'object' || row.type === 'array'
+}
+
+/** 键名 → 访问令牌序列（对象键为 string，数组下标为 number）。 */
+export function parseKey(key: string): (string | number)[] {
   const tokens: (string | number)[] = []
   let i = 0
-  const text = path.trim()
+  const text = key.trim()
   while (i < text.length) {
     if (text[i] === '[') {
       const end = text.indexOf(']', i)
@@ -32,50 +49,61 @@ export function parsePath(path: string): (string | number)[] {
     }
     let end = i
     while (end < text.length && text[end] !== '.' && text[end] !== '[') end += 1
-    const key = text.slice(i, end)
-    if (!key) throw new Error('路径段为空')
-    tokens.push(key)
+    const part = text.slice(i, end)
+    if (!part) throw new Error('键名为空')
+    tokens.push(part)
     i = end
     if (text[i] === '.') i += 1
   }
-  if (tokens.length === 0) throw new Error('路径为空')
+  if (tokens.length === 0) throw new Error('键名为空')
   return tokens
 }
 
-/** 叶子值 → 表格行（对象/数组递归展开）。 */
-export function flattenJson(value: unknown, prefix = '', rows: BodyRow[] = []): BodyRow[] {
+/** JSON 值 → 表格行（容器行 + 叶子行，depth 递增）。 */
+export function flattenJson(value: unknown): BodyRow[] {
+  const rows: BodyRow[] = []
+  if (value === null || value === undefined) return rows
   if (Array.isArray(value)) {
-    if (value.length === 0) {
-      rows.push({ path: prefix || '[]', value: '[]', type: 'json', enabled: true })
-      return rows
-    }
-    value.forEach((item, index) => flattenJson(item, `${prefix}[${index}]`, rows))
+    value.forEach((item, index) => walk(item, 0, `[${index}]`, rows))
     return rows
   }
-  if (value !== null && typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>)
-    if (entries.length === 0) {
-      rows.push({ path: prefix || '{}', value: '{}', type: 'json', enabled: true })
-      return rows
+  if (typeof value === 'object') {
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      walk(item, 0, key, rows)
     }
-    for (const [key, item] of entries) {
-      flattenJson(item, prefix ? `${prefix}.${key}` : key, rows)
-    }
-    return rows
   }
-  if (value === null) {
-    rows.push({ path: prefix, value: '', type: 'null', enabled: true })
-    return rows
-  }
-  const type: BodyValueType =
-    typeof value === 'number' ? 'number' : typeof value === 'boolean' ? 'boolean' : 'string'
-  rows.push({ path: prefix, value: String(value), type, enabled: true })
   return rows
 }
 
-/** 表格行 → 字面量（变量占位符按字符串原样保留）。 */
+function walk(value: unknown, depth: number, key: string, rows: BodyRow[]): void {
+  if (Array.isArray(value)) {
+    rows.push({ key, value: '', type: 'array', depth, enabled: true })
+    value.forEach((item, index) => walk(item, depth + 1, `[${index}]`, rows))
+    return
+  }
+  if (value !== null && typeof value === 'object') {
+    rows.push({ key, value: '', type: 'object', depth, enabled: true })
+    for (const [childKey, item] of Object.entries(value as Record<string, unknown>)) {
+      walk(item, depth + 1, childKey, rows)
+    }
+    return
+  }
+  if (value === null) {
+    rows.push({ key, value: '', type: 'null', depth, enabled: true })
+    return
+  }
+  const type: BodyValueType =
+    typeof value === 'number' ? 'number' : typeof value === 'boolean' ? 'boolean' : 'string'
+  rows.push({ key, value: String(value), type, depth, enabled: true })
+}
+
+/** 叶子行 → 字面量（变量占位符按字符串原样保留）。 */
 function convertValue(row: BodyRow): unknown {
   switch (row.type) {
+    case 'object':
+      return {}
+    case 'array':
+      return []
     case 'null':
       return null
     case 'number': {
@@ -85,6 +113,7 @@ function convertValue(row: BodyRow): unknown {
     case 'boolean':
       return row.value.trim() === 'true'
     case 'json': {
+      // 兼容历史数据：JSON 片段整值
       const text = row.value.trim()
       if (!text) return null
       return JSON.parse(text)
@@ -110,30 +139,34 @@ function assign(root: unknown, tokens: (string | number)[], value: unknown): unk
   return obj
 }
 
-/** 表格行 → JSON 值。 */
+/** 表格行 → JSON 值（容器行先建空容器，子级行再填充）。 */
 export function buildJson(rows: BodyRow[]): { value: unknown; error: string } {
   let root: unknown = undefined
-  let hasRow = false
+  const stack: string[] = []
   for (const row of rows) {
     if (!row.enabled) continue
-    const path = row.path.trim()
-    if (!path) continue
-    let tokens: (string | number)[]
+    const key = row.key.trim()
+    if (!key) continue
+    const depth = Math.max(0, Math.min(row.depth, stack.length))
+    stack.length = depth
+    stack[depth] = key
+
+    let tokens: (string | number)[] = []
     try {
-      tokens = parsePath(path)
+      for (const part of stack) tokens.push(...parseKey(part))
     } catch (err) {
-      return { value: null, error: `路径非法「${path}」：${(err as Error).message}` }
+      return { value: null, error: `键名非法「${key}」：${(err as Error).message}` }
     }
+
     let converted: unknown
     try {
       converted = convertValue(row)
     } catch {
-      return { value: null, error: `「${path}」的值不是合法 JSON` }
+      return { value: null, error: `「${key}」的值不是合法 JSON` }
     }
     root = assign(root, tokens, converted)
-    hasRow = true
   }
-  return { value: hasRow ? root : null, error: '' }
+  return { value: root === undefined ? null : root, error: '' }
 }
 
 /** JSON 文本 → 表格行（空/非法返回错误）。 */

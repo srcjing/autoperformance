@@ -29,3 +29,4 @@
 | 2026-10-28 | 修正 | 测试管理 | 前置步骤 Cookie 自动传播：k6 setup 阶段收集响应 Set-Cookie 并注入各 VU cookie jar（解决「登录成功但业务接口报会话过期」——网关会话 = ADMINSESSIONID Cookie + csrfToken 头，k6 cookie jar 不跨 VU 共享） | `prds/PRD-performance-testing-platform.md` §3.3.6.1 | dev |
 | 2026-10-28 | 修正 | 全平台表单 | 请求头/请求体统一为 Postman 式行编辑：HeaderRowsEditor（启用/键/值 + 变量高亮与点击插入）、BodyRowsEditor（路径键值行表达嵌套 attrs.ouId / list[0].id + JSON 预览 + 粘贴 JSON 拆解）、RequestImportDialog（原始 HTTP 报文/JSON 一键识别回填方法/地址/头/体） | `specs/api-contract.md` | dev |
 | 2026-10-28 | 修正 | 测试管理 | Cookie 传播加固：每迭代写回（避免网关轮换出未认证 session 覆盖 jar）、保留 Path/Domain/Secure/HttpOnly、变量键改 __af_cookies 并禁止用户变量使用 __af_ 前缀、setup 未获得 Cookie 时写测试日志告警；定位并清理导致 401 的接口级 Cookie 认证头残留 | `prds/PRD-performance-testing-platform.md` §3.3.6.1 | dev |
+| 2026-10-28 | 修正 | 请求配置 | 请求体改为「键值行 + +嵌套按钮」：容器行（对象/数组）承载子级，不再要求手写 a.b 路径；接口弹窗新增 4 个分区（基本信息/请求头/请求体/超时与描述）；请求头支持粘贴识别填充 | `specs/api-contract.md` | dev |

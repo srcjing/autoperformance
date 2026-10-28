@@ -1,7 +1,7 @@
 <template>
   <div class="body-rows">
     <div class="rows-head">
-      <span class="ap-field-label">{{ label || '请求体（键值行，路径支持嵌套如 attrs.ouId / list[0].id）' }}</span>
+      <span class="ap-field-label">{{ label || '请求体参数' }}</span>
       <div class="rows-actions">
         <button type="button" class="ap-btn ap-btn-ghost ap-btn-sm" :disabled="disabled" @click="openImport">
           粘贴 JSON 识别
@@ -51,7 +51,7 @@
       <thead>
         <tr>
           <th class="col-enable">启用</th>
-          <th class="col-path">参数路径</th>
+          <th class="col-key">参数名</th>
           <th class="col-type">类型</th>
           <th>值</th>
           <th class="col-op">操作</th>
@@ -62,14 +62,17 @@
           <td class="col-enable">
             <input v-model="row.enabled" type="checkbox" :disabled="disabled" @change="onChange" />
           </td>
-          <td class="col-path">
-            <input
-              v-model="row.path"
-              :disabled="disabled"
-              placeholder="attrs.ouId"
-              @focus="focusRef = $event.target as HTMLInputElement"
-              @input="onChange"
-            />
+          <td class="col-key">
+            <div class="key-cell" :style="{ paddingLeft: `${row.depth * 18}px` }">
+              <span v-if="row.depth > 0" class="tree-mark">└</span>
+              <input
+                v-model="row.key"
+                :disabled="disabled"
+                :placeholder="row.depth > 0 ? '子参数名' : '参数名'"
+                @focus="focusRef = $event.target as HTMLInputElement"
+                @input="onChange"
+              />
+            </div>
           </td>
           <td class="col-type">
             <select v-model="row.type" :disabled="disabled" @change="onChange">
@@ -77,13 +80,15 @@
               <option value="number">数字</option>
               <option value="boolean">布尔</option>
               <option value="null">null</option>
+              <option value="object">对象</option>
+              <option value="array">数组</option>
               <option value="json">JSON 片段</option>
             </select>
           </td>
           <td>
             <input
               v-model="row.value"
-              :disabled="disabled || row.type === 'null'"
+              :disabled="disabled || row.type === 'null' || row.type === 'object' || row.type === 'array'"
               :placeholder="row.type === 'json' ? '{} 或 []' : '值，支持 {{变量}}'"
               @focus="focusRef = $event.target as HTMLInputElement"
               @input="onChange"
@@ -93,14 +98,30 @@
             </span>
           </td>
           <td class="col-op">
-            <button type="button" class="ap-btn ap-btn-danger ap-btn-sm" :disabled="disabled" @click="removeRow(index)">
+            <button
+              type="button"
+              class="ap-btn ap-btn-ghost ap-btn-sm"
+              :disabled="disabled"
+              title="在该参数下增加一个嵌套子参数"
+              @click="addChild(index)"
+            >
+              + 嵌套
+            </button>
+            <button
+              type="button"
+              class="ap-btn ap-btn-danger ap-btn-sm"
+              :disabled="disabled"
+              @click="removeRow(index)"
+            >
               删除
             </button>
           </td>
         </tr>
       </tbody>
     </table>
-    <p v-else class="ap-muted">暂无请求体参数，可「添加参数」或「粘贴 JSON 识别」。</p>
+    <p v-else class="ap-muted">
+      暂无请求体参数；可「添加参数」逐项填写，或「粘贴 JSON 识别」自动展开（含嵌套）。
+    </p>
 
     <p v-if="error" class="ap-alert ap-alert-error">{{ error }}</p>
 
@@ -113,9 +134,9 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { buildJson, jsonTextToRows, type BodyRow } from '@/utils/bodyRows'
+import { buildJson, isContainer, jsonTextToRows, type BodyRow } from '@/utils/bodyRows'
 
-// 请求体行式编辑器：一行 = 一个叶子值，路径表达嵌套（attrs.ouId / list[0].id）。
+// 请求体编辑器：键值行 + 「+ 嵌套」按钮生成子级，自动还原成嵌套 JSON。
 const props = defineProps<{
   /** JSON 文本（空串表示无请求体）。 */
   modelValue: string
@@ -150,10 +171,7 @@ watch(
     if (!target && !current) return
     if (target === current) return
     const parsed = jsonTextToRows(target)
-    if (parsed.error) {
-      // 外部值无法解析（如历史脏数据）时不覆盖用户正在编辑的行
-      return
-    }
+    if (parsed.error) return
     rows.value = parsed.rows
     error.value = ''
   },
@@ -167,16 +185,41 @@ function onChange(): void {
     return
   }
   error.value = ''
-  const text = result.value === null ? '' : JSON.stringify(result.value, null, 2)
-  emit('update:modelValue', text)
+  emit('update:modelValue', result.value === null ? '' : JSON.stringify(result.value, null, 2))
 }
 
 function addRow(): void {
-  rows.value = [...rows.value, { path: '', value: '', type: 'string', enabled: true }]
+  rows.value = [...rows.value, { key: '', value: '', type: 'string', depth: 0, enabled: true }]
 }
 
+/** 在该行所有子级之后插入一个 depth+1 的子参数（叶子行会先转为「对象」）。 */
+function addChild(index: number): void {
+  const parent = rows.value[index]
+  if (!parent) return
+  let insertAt = index + 1
+  while (insertAt < rows.value.length && rows.value[insertAt].depth > parent.depth) insertAt += 1
+  const next = [...rows.value]
+  if (!isContainer(parent)) {
+    next[index] = { ...parent, type: 'object', value: '' }
+  }
+  next.splice(insertAt, 0, {
+    key: '',
+    value: '',
+    type: 'string',
+    depth: parent.depth + 1,
+    enabled: true,
+  })
+  rows.value = next
+  onChange()
+}
+
+/** 删除该行及其所有子级。 */
 function removeRow(index: number): void {
-  rows.value = rows.value.filter((_, i) => i !== index)
+  const target = rows.value[index]
+  if (!target) return
+  let end = index + 1
+  while (end < rows.value.length && rows.value[end].depth > target.depth) end += 1
+  rows.value = [...rows.value.slice(0, index), ...rows.value.slice(end)]
   onChange()
 }
 
@@ -299,6 +342,15 @@ function insertVar(name: string): void {
   color: #b42318;
   font-size: 12px;
 }
+.key-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tree-mark {
+  color: #94a3b8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
 .body-table input,
 .body-table select {
   width: 100%;
@@ -309,14 +361,18 @@ function insertVar(name: string): void {
   width: 56px;
   text-align: center;
 }
-.body-table .col-path {
+.body-table .col-key {
   width: 26%;
 }
 .body-table .col-type {
   width: 110px;
 }
 .body-table .col-op {
-  width: 88px;
+  width: 150px;
+  white-space: nowrap;
+}
+.body-table .col-op .ap-btn {
+  margin-right: 4px;
 }
 .body-table tr.row-disabled input:not([type='checkbox']):not(:disabled) {
   opacity: 0.55;

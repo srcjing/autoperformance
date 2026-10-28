@@ -2,9 +2,32 @@
   <div class="header-rows">
     <div class="rows-head">
       <span class="ap-field-label">{{ label }}</span>
-      <button type="button" class="ap-btn ap-btn-ghost ap-btn-sm" :disabled="disabled" @click="addRow">
-        + 添加请求头
-      </button>
+      <div class="rows-actions">
+        <button type="button" class="ap-btn ap-btn-ghost ap-btn-sm" :disabled="disabled" @click="importOpen = !importOpen">
+          粘贴请求头识别
+        </button>
+        <button type="button" class="ap-btn ap-btn-ghost ap-btn-sm" :disabled="disabled" @click="addRow">
+          + 添加请求头
+        </button>
+      </div>
+    </div>
+
+    <div v-if="importOpen" class="import-box">
+      <textarea
+        v-model="importText"
+        rows="4"
+        :disabled="disabled"
+        placeholder="Content-Type: application/json&#10;csrfToken: {{token}}"
+      />
+      <div class="import-actions">
+        <button type="button" class="ap-btn ap-btn-primary ap-btn-sm" :disabled="disabled" @click="applyImport">
+          识别并填充
+        </button>
+        <button type="button" class="ap-btn ap-btn-ghost ap-btn-sm" :disabled="disabled" @click="importOpen = false">
+          取消
+        </button>
+        <span v-if="importError" class="import-error">{{ importError }}</span>
+      </div>
     </div>
 
     <div v-if="variables && variables.length > 0" class="var-hint">
@@ -103,6 +126,9 @@ interface HeaderRow {
 
 const rows = ref<HeaderRow[]>([])
 const focusRef = ref<HTMLInputElement | null>(null)
+const importOpen = ref(false)
+const importText = ref('')
+const importError = ref('')
 const VAR_RE = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g
 
 function fromModel(model: Record<string, string> | undefined): HeaderRow[] {
@@ -150,6 +176,42 @@ function removeRow(index: number): void {
   emitRows()
 }
 
+/** 粘贴请求头识别：每行 `Name: value`（忽略空行与 # 注释），合并到现有头。 */
+function applyImport(): void {
+  const parsed: Record<string, string> = {}
+  for (const rawLine of importText.value.replace(/\r\n/g, '\n').split('\n')) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#') || line.startsWith('//')) continue
+    const pos = line.indexOf(':')
+    if (pos <= 0) {
+      importError.value = `无法识别该行（需 Name: value）：${line.slice(0, 40)}`
+      return
+    }
+    const name = line.slice(0, pos).trim()
+    const value = line.slice(pos + 1).trim()
+    if (!name) {
+      importError.value = '请求头名称不能为空'
+      return
+    }
+    parsed[name] = value
+  }
+  if (Object.keys(parsed).length === 0) {
+    importError.value = '未识别到有效请求头'
+    return
+  }
+  const merged: Record<string, string> = {}
+  for (const row of rows.value) {
+    const name = row.name.trim()
+    if (name) merged[name] = row.value
+  }
+  Object.assign(merged, parsed)
+  rows.value = Object.entries(merged).map(([name, value]) => ({ name, value, enabled: true }))
+  importError.value = ''
+  importOpen.value = false
+  importText.value = ''
+  emitRows()
+}
+
 function usedVars(text: string): string[] {
   const names = new Set<string>()
   if (!text) return []
@@ -190,6 +252,35 @@ function insertVar(name: string): void {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+.rows-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.import-box {
+  border: 1px dashed #c7d2fe;
+  border-radius: 8px;
+  padding: 8px;
+  background: #f8faff;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.import-box textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.import-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.import-error {
+  color: #b42318;
+  font-size: 12px;
 }
 .var-hint {
   display: flex;
