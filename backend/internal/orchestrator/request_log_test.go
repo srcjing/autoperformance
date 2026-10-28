@@ -67,7 +67,7 @@ func TestRecordRequestLogsWritesDetails(t *testing.T) {
 	writer := &fakeRequestWriter{}
 	o := New(Deps{Store: &fakeStore{task: requestLogTask()}, RequestLogs: writer})
 
-	o.recordRequestLogs(context.Background(), requestLogTask(), sampleResult())
+	o.recordRequestLogs(context.Background(), requestLogTask(), sampleResult(), nil)
 
 	if writer.calls != 1 {
 		t.Fatalf("应批量写入一次, got %d", writer.calls)
@@ -93,7 +93,7 @@ func TestRecordRequestLogsWritesDetails(t *testing.T) {
 // TestRecordRequestLogsWithoutWriter 未注入写入能力（或日志关闭）时静默跳过，不影响执行。
 func TestRecordRequestLogsWithoutWriter(t *testing.T) {
 	o := New(Deps{Store: &fakeStore{task: requestLogTask()}})
-	o.recordRequestLogs(context.Background(), requestLogTask(), sampleResult())
+	o.recordRequestLogs(context.Background(), requestLogTask(), sampleResult(), nil)
 }
 
 // TestRecordRequestLogsSwallowsError 写入失败仅记录测试日志，不阻断任务。
@@ -102,7 +102,7 @@ func TestRecordRequestLogsSwallowsError(t *testing.T) {
 	writer := &fakeRequestWriter{err: errors.New("db down")}
 	o := New(Deps{Store: store, RequestLogs: writer})
 
-	o.recordRequestLogs(context.Background(), requestLogTask(), sampleResult())
+	o.recordRequestLogs(context.Background(), requestLogTask(), sampleResult(), nil)
 
 	if writer.calls != 1 {
 		t.Fatalf("应尝试写入一次, got %d", writer.calls)

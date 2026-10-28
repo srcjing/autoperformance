@@ -186,6 +186,7 @@ export function createDefaultFlow(): FlowConfig {
     timeout: '5s',
     think_time: '0.5s',
     parameterization: null,
+    capture_response_body: false,
     preparation: { connectivity_check: true, interface_ready_check: true, on_failure: 'abort' },
     collection: {
       interval: '5s',
@@ -265,6 +266,7 @@ export function normalizeFlow(raw: unknown): FlowConfig {
         : null,
     preparation: normalizePreparation(src.preparation),
     collection: normalizeCollection(src.collection),
+    capture_response_body: src.capture_response_body === true,
   }
 }
 
@@ -291,6 +293,7 @@ export function toFlowPayload(flow: FlowConfig): FlowConfigPayload {
       path: flow.parameterization.path.trim(),
     }
   }
+  payload.capture_response_body = flow.capture_response_body === true
   if (flow.preparation) payload.preparation = { ...flow.preparation }
   if (flow.collection) {
     payload.collection = { ...flow.collection, metrics: [...flow.collection.metrics] }

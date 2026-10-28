@@ -404,6 +404,8 @@ export interface FlowConfig {
   parameterization: FlowParameterization | null
   preparation?: FlowPreparationConfig
   collection?: FlowCollectionConfig
+  /** 是否采集每个请求的响应体（写入请求详情；默认关闭）。 */
+  capture_response_body?: boolean
 }
 
 /** 流程参数提交体（后端 domain.FlowConfig 白名单）。 */
@@ -418,6 +420,7 @@ export interface FlowConfigPayload {
   parameterization?: FlowParameterization
   preparation?: FlowPreparationConfig
   collection?: FlowCollectionConfig
+  capture_response_body?: boolean
 }
 
 /** 报告输出配置（决策 #4：默认全量三种格式）。 */

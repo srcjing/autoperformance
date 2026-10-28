@@ -70,6 +70,8 @@ func (r *Runner) ResultPath(taskID int64) string {
 func (r *Runner) Command(ctx context.Context, scriptPath, resultPath string) *exec.Cmd {
 	args := []string{
 		"run",
+		// raw：console.log 输出原始文本（供请求详情 AFREQ 行解析；否则被 logrus 包装成 time=... msg="..."）。
+		"--log-format", "raw",
 		scriptPath,
 		"--out", "json=" + resultPath,
 	}

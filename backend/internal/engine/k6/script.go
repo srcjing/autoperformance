@@ -56,7 +56,9 @@ type scriptView struct {
 	DurationText     string
 	TimeoutText      string
 	ThinkTimeSeconds float64
-	Requests         []scriptRequest
+	// CaptureResponseBody 是否采集每个请求的响应体（输出 AFREQ 行供服务端落库）。
+	CaptureResponseBody bool
+	Requests            []scriptRequest
 }
 
 // scriptTemplate k6 脚本模板：变量一律经 js 函数（strconv.Quote）转义，不做原始字符串拼接。
@@ -115,6 +117,19 @@ export default function () {
       res = http.request(req.method, req.url, req.body, params);
     }
     check(res, { 'status is 2xx-3xx': (r) => r.status >= 200 && r.status < 400 });
+{{- if .CaptureResponseBody }}
+    try {
+      console.log('AFREQ|' + JSON.stringify({
+        i: req.interfaceId,
+        m: req.method,
+        u: req.url,
+        s: res.status,
+        d: Math.round(res.timings.duration),
+        e: res.error || '',
+        b: (res.body === null || res.body === undefined) ? '' : String(res.body).slice(0, 4096),
+      }));
+    } catch (err) { /* 采集异常不影响压测 */ }
+{{- end }}
     if (THINK_TIME > 0) {
       sleep(THINK_TIME);
     }
@@ -152,6 +167,7 @@ func BuildScript(spec ScriptSpec) (string, error) {
 		DurationText:     params.DurationText,
 		TimeoutText:      params.TimeoutText,
 		ThinkTimeSeconds: params.ThinkTime.Seconds(),
+		CaptureResponseBody: spec.Flow.CaptureResponseBody,
 		Requests:         make([]scriptRequest, 0, len(spec.Interfaces)),
 	}
 	for _, st := range params.Stages {

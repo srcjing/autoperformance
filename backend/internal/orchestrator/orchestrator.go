@@ -262,7 +262,21 @@ func (o *Orchestrator) run(ctx context.Context, taskID int64) error {
 	o.log(ctx, taskID, "info", "k6 脚本已生成，开始压测")
 
 	resultPath := o.runner.ResultPath(taskID)
+	// 采集响应体开启时，k6 脚本会逐请求输出 `AFREQ|{json}` 行；在此收集（不写入测试日志），
+	// 用作请求详情（含 response_body）。未开启时 captured 为空，回退用 result.json 还原。
+	var captureMu sync.Mutex
+	var captured []capturedRequest
 	if err := o.runner.Run(ctx, scriptPath, resultPath, func(line string) {
+		if strings.HasPrefix(line, afreqPrefix) {
+			if cr, ok := parseCapturedRequest(line); ok {
+				captureMu.Lock()
+				if len(captured) < maxCapturedRequests {
+					captured = append(captured, cr)
+				}
+				captureMu.Unlock()
+			}
+			return
+		}
 		o.log(ctx, taskID, "info", line)
 	}); err != nil {
 		if ctx.Err() != nil {
@@ -283,7 +297,7 @@ func (o *Orchestrator) run(ctx context.Context, taskID int64) error {
 		return fmt.Errorf("采集压测结果失败: %w", err)
 	}
 	// 逐请求明细：写库前由日志服务按日志设置检查开关/类型并采样限量。
-	o.recordRequestLogs(ctx, task, parsed)
+	o.recordRequestLogs(ctx, task, parsed, captured)
 	wall := parsed.EndedAt.Sub(parsed.StartedAt)
 	metrics := evaluator.Normalize(toEvaluatorSamples(parsed.Samples), evaluator.Options{
 		Wall:   wall,

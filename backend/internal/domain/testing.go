@@ -175,6 +175,9 @@ type FlowConfig struct {
 	Timeout          string            `json:"timeout"`
 	ThinkTime        string            `json:"think_time"`
 	Parameterization *Parameterization `json:"parameterization"`
+	// CaptureResponseBody 是否在压测时采集每个请求的响应体（写请求详情日志）。
+	// 默认关闭：逐请求记录响应体会显著增大输出与影响压测性能（任务级可选）。
+	CaptureResponseBody bool `json:"capture_response_body"`
 	// 以下阶段配置为透传快照（准备/采集/报告/清理阶段开关与采样间隔）。
 	Preparation json.RawMessage `json:"preparation"`
 	Collection  json.RawMessage `json:"collection"`

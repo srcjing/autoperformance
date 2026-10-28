@@ -16,7 +16,7 @@ func TestRunK6NoShell(t *testing.T) {
 
 	cmd := r.Command(context.Background(), scriptPath, resultPath)
 
-	want := []string{"/usr/local/bin/k6", "run", scriptPath, "--out", "json=" + resultPath}
+	want := []string{"/usr/local/bin/k6", "run", "--log-format", "raw", scriptPath, "--out", "json=" + resultPath}
 	if len(cmd.Args) != len(want) {
 		t.Fatalf("Args = %v, want %v", cmd.Args, want)
 	}
@@ -58,7 +58,7 @@ func TestRunK6PathsStaySingleArgument(t *testing.T) {
 	if !found {
 		t.Fatalf("结果路径应作为独立参数传递: %v", cmd.Args)
 	}
-	if len(cmd.Args) != 5 {
+	if len(cmd.Args) != 7 {
 		t.Fatalf("参数数量异常（疑似被拆分/注入）: %v", cmd.Args)
 	}
 }

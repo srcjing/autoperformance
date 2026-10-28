@@ -214,6 +214,21 @@
       </div>
     </div>
 
+    <div class="cfg-block">
+      <span class="ap-field-label">请求详情</span>
+      <label class="cfg-check">
+        <input
+          type="checkbox"
+          :checked="captureBody"
+          :disabled="disabled"
+          @change="onCaptureBodyChange"
+        />
+        <span
+          >采集响应体（<b>压测性能开销较大，默认不采集</b>；开启后请求详情记录响应内容）</span
+        >
+      </label>
+    </div>
+
     <p class="ap-alert ap-alert-hint">
       参数白名单：并发数须为正整数且不超过平台 max_vus；时长仅支持 ms/s/m/h（如 300s、5m）。
       非法取值由后端拦截并返回 23004 / 10003。
@@ -277,6 +292,11 @@ const rampTotal = computed(() => {
 
 function patch(next: Partial<FlowConfig>): void {
   emit('update:modelValue', { ...props.modelValue, ...next })
+}
+
+const captureBody = computed(() => props.modelValue.capture_response_body === true)
+function onCaptureBodyChange(event: Event): void {
+  patch({ capture_response_body: (event.target as HTMLInputElement).checked })
 }
 
 function onModeChange(event: Event): void {
@@ -394,6 +414,18 @@ function toggleMetric(metric: ThresholdMetric): void {
 .cfg-grid > .ap-field {
   flex: 1;
   min-width: 180px;
+}
+
+.cfg-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+}
+.cfg-check input {
+  accent-color: var(--ap-primary);
 }
 
 .cfg-block {
