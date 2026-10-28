@@ -24,7 +24,7 @@
               :key="item.path"
               :to="item.path"
               class="nav-item"
-              active-class="active"
+              :class="{ active: isActive(item.path) }"
             >
               {{ item.label }}
             </RouterLink>
@@ -139,10 +139,7 @@ const navGroups: NavGroup[] = [
   {
     title: '日志管理',
     children: [
-      { path: '/logs/user', label: '用户日志', module: 'log.user' },
-      { path: '/logs/system', label: '系统日志', module: 'log.system' },
-      { path: '/logs/test', label: '测试日志', module: 'log.test' },
-      { path: '/logs/request', label: '请求详情', module: 'log.request' },
+      { path: '/logs/user', label: '日志查询', module: 'log.user' },
       { path: '/logs/settings', label: '日志设置', module: 'setting.log' },
     ],
   },
@@ -197,6 +194,14 @@ function iconOf(title: string): string {
 function toggleGroup(title: string): void {
   if (collapsedGroups.has(title)) collapsedGroups.delete(title)
   else collapsedGroups.add(title)
+}
+
+// 日志查询（/logs/user）在任一 /logs/* 子页（除设置）都高亮。
+function isActive(path: string): boolean {
+  if (path === '/logs/user') {
+    return route.path.startsWith('/logs/') && !route.path.startsWith('/logs/settings')
+  }
+  return route.path === path || route.path.startsWith(path + '/')
 }
 
 const currentTitle = computed(() => (route.meta.title as string) || '')
