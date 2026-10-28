@@ -3,7 +3,7 @@
     <div class="ov-head">
       <div>
         <h2 class="ov-title">概览</h2>
-        <p class="ap-muted">环境、产品、测试任务与报告的运行态势</p>
+        <p class="ap-muted">环境、产品、测试任务与报告的运行概况</p>
       </div>
     </div>
 
@@ -40,7 +40,7 @@
     </div>
 
     <div class="ov-actions">
-      <RouterLink to="/testing/tasks" class="ap-btn ap-btn-primary">去创建任务</RouterLink>
+      <RouterLink to="/testing/tasks" class="ap-btn ap-btn-primary">创建测试任务</RouterLink>
       <RouterLink to="/reports/list" class="ap-btn ap-btn-ghost">查看报告</RouterLink>
     </div>
   </div>
@@ -62,9 +62,9 @@ interface StatItem {
 }
 
 const stats = ref<StatItem[]>([
-  { label: '待测环境', value: '-', hint: '环境管理', to: '/environments/list' },
-  { label: '在册产品', value: '-', hint: '产品管理', to: '/products/list' },
-  { label: '在册接口', value: '-', hint: '接口管理', to: '/products/interfaces' },
+  { label: '环境总数', value: '-', hint: '环境管理', to: '/environments/list' },
+  { label: '产品总数', value: '-', hint: '产品管理', to: '/products/list' },
+  { label: '接口总数', value: '-', hint: '接口管理', to: '/products/interfaces' },
   { label: '运行中任务', value: '-', hint: '测试任务', to: '/testing/tasks' },
 ])
 const recentTasks = ref<TestTaskInfo[]>([])

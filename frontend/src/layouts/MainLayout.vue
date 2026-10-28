@@ -122,8 +122,8 @@ const visibleNavGroups = computed<NavGroup[]>(() =>
     .filter((group) => group.children.length > 0),
 )
 
-// 一级模块折叠状态（同原型：点击分组标题收起/展开子模块）。
-const collapsedGroups = reactive(new Set<string>())
+// 一级模块默认全部收起（只显示标题，点击展开子模块）。
+const collapsedGroups = reactive(new Set<string>(navGroups.map((group) => group.title)))
 function toggleGroup(title: string): void {
   if (collapsedGroups.has(title)) collapsedGroups.delete(title)
   else collapsedGroups.add(title)
@@ -172,20 +172,23 @@ async function onLogout(): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 100%;
-  padding: 12px 16px 6px;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #6b7280;
+  width: calc(100% - 16px);
+  margin: 2px 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e5e7eb;
   background: none;
   border: none;
+  border-radius: 6px;
   cursor: pointer;
   font-family: inherit;
   text-align: left;
+  transition: background 0.15s;
 }
 .nav-group-title:hover {
-  color: #9ca3af;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 .caret {
   font-size: 11px;
@@ -196,8 +199,10 @@ async function onLogout(): Promise<void> {
   transform: rotate(-90deg);
 }
 .nav-single {
-  padding-left: 16px;
-  margin-bottom: 4px;
+  margin: 2px 8px 6px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-weight: 600;
 }
 .nav-items {
   display: flex;
