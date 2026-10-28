@@ -2,7 +2,10 @@
   <div class="app-shell">
     <!-- 侧边栏：按权限动态过滤的 6 大模块导航 -->
     <aside class="sidebar">
-      <div class="logo">auto_performance</div>
+      <div class="logo">
+        <div class="logo-brand">auto_performance</div>
+        <div class="logo-sub">性能测试平台</div>
+      </div>
       <nav class="nav">
         <RouterLink to="/overview" class="nav-item nav-single" active-class="active">
           <span class="nav-icon" v-html="ICONS.overview"></span><span>概览</span>
@@ -181,11 +184,19 @@ async function onLogout(): Promise<void> {
 }
 
 .logo {
-  padding: 18px 16px;
+  padding: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.logo-brand {
   font-size: 16px;
   font-weight: 700;
   color: #fff;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  letter-spacing: 0.01em;
+}
+.logo-sub {
+  font-size: 11.5px;
+  color: #7b8794;
+  margin-top: 2px;
 }
 
 .nav {
@@ -252,11 +263,11 @@ async function onLogout(): Promise<void> {
   flex-direction: column;
   gap: 1px;
   margin: 2px 8px 4px;
-  padding-left: 38px;
 }
 .nav-item {
   display: block;
-  padding: 8px 10px;
+  /* 左侧 38px 缩进与一级图标+文字对齐；背景通栏（小 margin），对齐参考图选中项 */
+  padding: 8px 10px 8px 38px;
   border-radius: 5px;
   font-size: 13px;
   color: #9ca3af;
