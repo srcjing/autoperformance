@@ -74,6 +74,9 @@ type scriptView struct {
 	TestMode string
 	// VarPattern 变量占位符正则（由 Go 侧提供 JS 字符串字面量，避免模板中出现区分符）。
 	VarPattern string
+	// CookieOrigin 步骤请求的 origin（scheme://host:port），用于把 setup 阶段拿到的
+	// 会话 Cookie 注入各 VU 的 cookie jar。
+	CookieOrigin string
 	Requests   []scriptRequest
 	SetupSteps []scriptStep
 	MainSteps  []scriptStep
@@ -244,6 +247,17 @@ const REQUEST_TIMEOUT = {{ js .TimeoutText }};
 const THINK_TIME = {{ .ThinkTimeSeconds }};
 const CAPTURE_BODY = {{ .CaptureResponseBody }};
 const VAR_PATTERN = {{ js .VarPattern }};
+const COOKIE_ORIGIN = {{ js .CookieOrigin }};
+
+// collectCookies 收集响应下发/更新的 Cookie（会话维持靠 Cookie + csrfToken 时必需）。
+function collectCookies(res, into) {
+  if (!res || !res.cookies) { return; }
+  for (var name in res.cookies) {
+    if (res.cookies[name] && res.cookies[name].length) {
+      into[name] = res.cookies[name][0].value;
+    }
+  }
+}
 
 // 变量/提取异常告警：每个（步骤+变量）只报一次，服务端 丢弃重复并落测试日志。
 const WARNED = {};
@@ -380,9 +394,10 @@ function send(step, vars) {
   return res;
 }
 
-function runSteps(steps, vars) {
+function runSteps(steps, vars, cookies) {
   for (var i = 0; i < steps.length; i++) {
     var res = send(steps[i], vars);
+    if (cookies) { collectCookies(res, cookies); }
     applyExtract(res, steps[i].extract, vars, steps[i].label);
   }
 }
@@ -432,14 +447,27 @@ const PRE_STEPS = [
 
 export function setup() {
   var vars = {};
-  runSteps(SETUP_STEPS, vars);
+  // 前置阶段同时收集 Cookie：部分网关的会话 = Cookie(会话 ID) + csrfToken 头。
+  var cookies = {};
+  runSteps(SETUP_STEPS, vars, cookies);
+  vars.__cookies = cookies;
   return vars;
 }
 
 export default function (data) {
   // once_per_test 变量在迭代开始时复制一份，避免跨 VU/迭代互相污染。
   var vars = {};
-  if (data) { for (var key in data) { vars[key] = data[key]; } }
+  var cookies = null;
+  if (data) {
+    for (var key in data) {
+      if (key === '__cookies') { cookies = data[key]; } else { vars[key] = data[key]; }
+    }
+  }
+  // setup 拿到的会话 Cookie 注入当前 VU 的 cookie jar（k6 的 jar 不跨 VU 共享）。
+  if (cookies) {
+    var jar = http.cookieJar();
+    for (var name in cookies) { jar.set(COOKIE_ORIGIN, name, cookies[name]); }
+  }
   for (var i = 0; i < MAIN_STEPS.length; i++) {
     if (PRE_STEPS.length > 0) { runSteps(PRE_STEPS, vars); }
     var res = send(MAIN_STEPS[i], vars);
@@ -502,6 +530,16 @@ func BuildScript(spec ScriptSpec) (string, error) {
 			return "", err
 		}
 		view.SetupSteps, view.MainSteps, view.PreSteps = setupSteps, mainSteps, preSteps
+		// 取首个步骤的 origin 作为 cookie jar 注入目标（全部步骤同 target_host）。
+		for _, group := range [][]scriptStep{setupSteps, mainSteps, preSteps} {
+			if len(group) == 0 {
+				continue
+			}
+			if u, err := url.Parse(group[0].URL); err == nil && u.Scheme != "" && u.Host != "" {
+				view.CookieOrigin = u.Scheme + "://" + u.Host
+			}
+			break
+		}
 		tmpl = flowTmpl
 	} else {
 		if len(spec.Interfaces) == 0 {

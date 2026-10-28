@@ -27,3 +27,6 @@ deploy/offline/_dl/
 # 抓包/抓站导出（可能含真实凭据，禁止入库）
 *.har
 *.pcap
+
+# 本地分析脚本/临时产物
+.qagent/

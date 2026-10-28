@@ -114,6 +114,7 @@
             <option value="Accept" />
             <option value="Authorization" />
             <option value="Cookie" />
+            <option value="csrfToken" />
             <option value="X-Api-Key" />
             <option value="User-Agent" />
           </datalist>
