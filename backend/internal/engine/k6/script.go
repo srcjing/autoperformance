@@ -249,13 +249,20 @@ const CAPTURE_BODY = {{ .CaptureResponseBody }};
 const VAR_PATTERN = {{ js .VarPattern }};
 const COOKIE_ORIGIN = {{ js .CookieOrigin }};
 
-// collectCookies 收集响应下发/更新的 Cookie（会话维持靠 Cookie + csrfToken 时必需）。
+// collectCookies 收集响应下发/更新的 Cookie（保留 Path/Domain/Secure/HttpOnly 属性）。
 function collectCookies(res, into) {
   if (!res || !res.cookies) { return; }
   for (var name in res.cookies) {
-    if (res.cookies[name] && res.cookies[name].length) {
-      into[name] = res.cookies[name][0].value;
-    }
+    var list = res.cookies[name];
+    if (!list || !list.length) { continue; }
+    var c = list[0];
+    into[name] = {
+      value: c.value,
+      path: c.path || '/',
+      domain: c.domain || '',
+      secure: !!c.secure,
+      httpOnly: !!c.httpOnly,
+    };
   }
 }
 
@@ -450,7 +457,13 @@ export function setup() {
   // 前置阶段同时收集 Cookie：部分网关的会话 = Cookie(会话 ID) + csrfToken 头。
   var cookies = {};
   runSteps(SETUP_STEPS, vars, cookies);
-  vars.__cookies = cookies;
+  var cookieCount = 0;
+  for (var cookieName in cookies) { cookieCount += 1; }
+  if (cookieCount === 0) {
+    warn('setup:cookies', '前置步骤未获得任何会话 Cookie；若目标系统依赖 Cookie 会话（如 ADMINSESSIONID），'
+      + '请检查登录请求是否被接口的 Cookie 认证头绑定了过期会话（登录会返回 200 但不下发新会话）');
+  }
+  vars.__af_cookies = cookies;
   return vars;
 }
 
@@ -460,13 +473,23 @@ export default function (data) {
   var cookies = null;
   if (data) {
     for (var key in data) {
-      if (key === '__cookies') { cookies = data[key]; } else { vars[key] = data[key]; }
+      if (key === '__af_cookies') { cookies = data[key]; } else { vars[key] = data[key]; }
     }
   }
-  // setup 拿到的会话 Cookie 注入当前 VU 的 cookie jar（k6 的 jar 不跨 VU 共享）。
+  // 每个迭代开头都把 setup 阶段的会话 Cookie 写回 jar：
+  // 部分网关会在每个响应（含 401）下发新的未认证 session id，覆盖 jar；
+  // 不每迭代写回会导致从第二次迭代起全部会话失效。
   if (cookies) {
     var jar = http.cookieJar();
-    for (var name in cookies) { jar.set(COOKIE_ORIGIN, name, cookies[name]); }
+    for (var name in cookies) {
+      var c = cookies[name];
+      if (!c) { continue; }
+      var opts = { path: c.path || '/' };
+      if (c.domain) { opts.domain = c.domain; }
+      if (c.secure) { opts.secure = true; }
+      if (c.httpOnly) { opts.httpOnly = true; }
+      jar.set(COOKIE_ORIGIN, name, c.value, opts);
+    }
   }
   for (var i = 0; i < MAIN_STEPS.length; i++) {
     if (PRE_STEPS.length > 0) { runSteps(PRE_STEPS, vars); }

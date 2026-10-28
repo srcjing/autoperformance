@@ -88,3 +88,14 @@ func TestStepInterfaceIDsDedupes(t *testing.T) {
 		t.Fatalf("接口 ID 去重错误: %v", ids)
 	}
 }
+
+// TestValidateStepsRejectsReservedVarPrefix 变量名不得使用平台保留前缀 __af_（Cookie 传递用）。
+func TestValidateStepsRejectsReservedVarPrefix(t *testing.T) {
+	f := flowConfig(FlowStep{
+		Seq: 1, InterfaceID: 1,
+		Extract: []ExtractRule{{Name: "__af_cookies", Source: ExtractSourceJSONPath, Expr: "$.x"}},
+	})
+	if _, err := f.ValidateSteps(); err == nil {
+		t.Fatal("保留前缀 __af_ 应被拒绝")
+	}
+}

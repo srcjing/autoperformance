@@ -61,7 +61,7 @@ func TestBuildFlowScriptBucketsStepsByScope(t *testing.T) {
 		"const MAIN_STEPS = [",
 		"const PRE_STEPS = [",
 		"runSteps(SETUP_STEPS, vars, cookies)",
-		"jar.set(COOKIE_ORIGIN, name, cookies[name])",
+		"jar.set(COOKIE_ORIGIN, name, c.value, opts);",
 		`const COOKIE_ORIGIN = "https://10.52.78.246:8443"`,
 		"url: \"https://10.52.78.246:8443/login\"",
 		"url: \"https://10.52.78.246:8443/orders?token={{token}}\"",
@@ -113,6 +113,25 @@ func TestFlowScriptEmitsVariableWarnings(t *testing.T) {
 		`label: "第 3 步"`,
 		"未定义，已按空值发送",
 		"提取失败（",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("流程脚本缺少 %q", want)
+		}
+	}
+}
+
+// TestFlowScriptCookieInjectionPerIteration 每迭代注入会话 Cookie 且保留属性。
+func TestFlowScriptCookieInjectionOncePerVU(t *testing.T) {
+	script, err := BuildScript(flowSpec())
+	if err != nil {
+		t.Fatalf("生成流程脚本失败: %v", err)
+	}
+	for _, want := range []string{
+		"if (cookies) {",
+		"__af_cookies",
+		"opts.secure = true;",
+		"opts.httpOnly = true;",
+		"jar.set(COOKIE_ORIGIN, name, c.value, opts);",
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("流程脚本缺少 %q", want)

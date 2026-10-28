@@ -385,6 +385,10 @@ func (f *FlowConfig) ValidateSteps() ([]FlowStep, error) {
 			if !flowVarNameRE.MatchString(name) {
 				return nil, fmt.Errorf("%w: 变量名非法", ErrInvalidFlow)
 			}
+			// 保留前缀：__af_ 由平台内部使用（如 __af_cookies），避免与用户变量冲突。
+			if strings.HasPrefix(name, "__af_") {
+				return nil, fmt.Errorf("%w: 变量名不能使用保留前缀 __af_", ErrInvalidFlow)
+			}
 			source := strings.ToLower(strings.TrimSpace(rule.Source))
 			expr := strings.TrimSpace(rule.Expr)
 			if source != ExtractSourceJSONPath && source != ExtractSourceRegex {
