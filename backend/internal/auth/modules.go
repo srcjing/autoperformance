@@ -42,6 +42,8 @@ var permissionModules = []PermissionModule{
 	{"log.user", "日志管理 · 用户日志", readOnly, false},
 	{"log.system", "日志管理 · 系统日志", readOnly, false},
 	{"log.test", "日志管理 · 测试日志", readOnly, false},
+	{"log.request", "日志管理 · 请求详情", readOnly, false},
+	{"setting.log", "日志管理 · 日志设置（写入范围与保留策略）", readWrite, false},
 	{"setting.admin", "系统设置 · 管理员管理（含角色）", writeOnly, true},
 	{"setting.cert", "系统设置 · 证书管理", writeOnly, true},
 	{"setting.ssh", "系统设置 · SSH 与 Host 管理", writeOnly, true},

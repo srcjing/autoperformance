@@ -114,8 +114,8 @@ func TestCreateRoleDuplicateName(t *testing.T) {
 func TestPermissionModulesExposed(t *testing.T) {
 	svc, _, _ := newTestService()
 	mods := svc.PermissionModules()
-	if len(mods) != 13 {
-		t.Fatalf("权限矩阵应为 13 项，got %d", len(mods))
+	if len(mods) != 15 {
+		t.Fatalf("权限矩阵应为 15 项，got %d", len(mods))
 	}
 	var sensitive int
 	for _, m := range mods {

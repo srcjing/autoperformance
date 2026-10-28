@@ -90,10 +90,14 @@ var expectedRoutePlan = []string{
 	"POST /api/v1/reports/import",
 	"GET /api/v1/reports/:id/export",
 	"GET /api/v1/reports/:id/artifact",
-	// 日志管理（3）
+	// 日志管理（4）
 	"GET /api/v1/logs/user",
 	"GET /api/v1/logs/system",
 	"GET /api/v1/logs/test",
+	"GET /api/v1/logs/request",
+	// 日志设置（2）
+	"GET /api/v1/log-settings",
+	"PUT /api/v1/log-settings",
 	// 系统设置 · 管理员与角色（15）
 	"GET /api/v1/admins",
 	"POST /api/v1/admins",
@@ -239,7 +243,7 @@ func bodyCode(t *testing.T, w *httptest.ResponseRecorder) int {
 	return body.Code
 }
 
-// TestRouterRegistersAllSeventyEightEndpoints 校验 78 接口全部注册且无多余。
+// TestRouterRegistersAllSeventyEightEndpoints 校验全部接口（81 REST + /ws）全部注册且无多余。
 func TestRouterRegistersAllSeventyEightEndpoints(t *testing.T) {
 	r, _ := newTestRouter(t, map[string]bool{})
 
@@ -248,8 +252,8 @@ func TestRouterRegistersAllSeventyEightEndpoints(t *testing.T) {
 		got[rt.Method+" "+rt.Path] = true
 	}
 
-	if len(expectedRoutePlan) != 79 {
-		t.Fatalf("期望清单应为 79 条（78 REST + WS），实际 %d 条", len(expectedRoutePlan))
+	if len(expectedRoutePlan) != 82 {
+		t.Fatalf("期望清单应为 82 条（81 REST + WS），实际 %d 条", len(expectedRoutePlan))
 	}
 	for _, want := range expectedRoutePlan {
 		if !got[want] {
@@ -257,14 +261,14 @@ func TestRouterRegistersAllSeventyEightEndpoints(t *testing.T) {
 		}
 	}
 
-	// 业务路由总数：78 REST + /ws + /healthz；NoRoute 不计入 Routes()。
-	if len(r.Routes()) != 80 {
+	// 业务路由总数：81 REST + /ws + /healthz；NoRoute 不计入 Routes()。
+	if len(r.Routes()) != 83 {
 		var paths []string
 		for _, rt := range r.Routes() {
 			paths = append(paths, rt.Method+" "+rt.Path)
 		}
 		sort.Strings(paths)
-		t.Fatalf("路由总数 = %d, want 80（78 REST + /ws + /healthz）:\n%s", len(r.Routes()), paths)
+		t.Fatalf("路由总数 = %d, want 83（81 REST + /ws + /healthz）:\n%s", len(r.Routes()), paths)
 	}
 }
 

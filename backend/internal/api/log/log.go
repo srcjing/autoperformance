@@ -1,8 +1,10 @@
-// Package log 日志管理 HTTP handler（用户/系统/测试日志查询）。
+// Package log 日志管理 HTTP handler（用户/系统/测试/请求详情查询 + 日志设置）。
 //
 // 对齐 api-contract §2.6 与 §5.2：
-//   - 路由权限点：log.user:read / log.system:read / log.test:read（日志默认只读，无写端点）；
-//   - 错误码：25001 查询时间范围非法（服务层校验）；
+//   - 日志查询权限点：log.user:read / log.system:read / log.test:read / log.request:read
+//     （日志默认只读，无删除/修改端点）；
+//   - 日志设置（GET/PUT /log-settings）归 setting.log 子模块：查看 read、保存 write；
+//   - 错误码：25001 查询时间范围非法（服务层校验）、10003 参数/设置非法；
 //   - ID 一律以字符串输出（api-contract §1.7），query 兼容字符串/数字 ID；
 //   - 审计日志 HMAC 链式防篡改、写入前脱敏在服务层与仓储层强制（DES-T-006 / DES-I-001）。
 package log
@@ -25,6 +27,12 @@ type Service interface {
 	ListUserLogs(ctx context.Context, q domain.UserLogQuery) (*logsvc.UserLogPage, error)
 	ListSystemLogs(ctx context.Context, q domain.SystemLogQuery) (*logsvc.SystemLogPage, error)
 	ListTestLogs(ctx context.Context, q domain.TestLogQuery) (*logsvc.TestLogPage, error)
+	// ListRequestLogs 请求详情查询（压测逐请求明细，可按任务/接口定位）。
+	ListRequestLogs(ctx context.Context, q domain.RequestLogQuery) (*logsvc.RequestLogPage, error)
+	// GetLogSetting 读取日志设置（服务开关/最大条数/存储天数/启用类型）。
+	GetLogSetting(ctx context.Context) (*domain.LogSetting, error)
+	// UpdateLogSetting 保存日志设置，并触发一次过期/超量清理。
+	UpdateLogSetting(ctx context.Context, in domain.LogSetting) (*domain.LogSetting, error)
 }
 
 // Handler 日志管理 HTTP handler。
@@ -63,6 +71,40 @@ type systemLogDTO struct {
 	Event     string `json:"event,omitempty"`
 	Message   string `json:"message,omitempty"`
 	CreatedAt string `json:"created_at"`
+}
+
+// requestLogDTO 请求详情响应（任务/接口定位 + 请求/响应摘要 + 错误与耗时）。
+type requestLogDTO struct {
+	ID             string `json:"id"`
+	TaskID         string `json:"task_id,omitempty"`
+	InterfaceID    string `json:"interface_id,omitempty"`
+	Seq            int64  `json:"seq"`
+	OccurredAt     string `json:"occurred_at"`
+	Method         string `json:"method"`
+	URL            string `json:"url"`
+	RequestBody    string `json:"request_body,omitempty"`
+	ResponseStatus int    `json:"response_status"`
+	ResponseBody   string `json:"response_body,omitempty"`
+	ErrorCode      string `json:"error_code,omitempty"`
+	ErrorMessage   string `json:"error_message,omitempty"`
+	DurationMs     int64  `json:"duration_ms"`
+}
+
+// logSettingDTO 日志设置响应。
+type logSettingDTO struct {
+	Enabled       bool     `json:"enabled"`
+	MaxCount      int64    `json:"max_count"`
+	RetentionDays int      `json:"retention_days"`
+	LogTypes      []string `json:"log_types"`
+	UpdatedAt     string   `json:"updated_at,omitempty"`
+}
+
+// logSettingPayload 日志设置请求体（白名单字段 + 指针支持部分更新，避免误清零）。
+type logSettingPayload struct {
+	Enabled       *bool     `json:"enabled"`
+	MaxCount      *int64    `json:"max_count"`
+	RetentionDays *int      `json:"retention_days"`
+	LogTypes      *[]string `json:"log_types"`
 }
 
 // testLogDTO 测试日志响应（任务定位 + 增量 seq + 级别 + 内容）。

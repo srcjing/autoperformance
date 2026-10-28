@@ -55,6 +55,22 @@ type EngineRunner interface {
 	Run(ctx context.Context, scriptPath, resultPath string, onLine func(line string)) error
 }
 
+// RequestLogWriter 请求详情写入能力（由 service/log.Service 实现；nil 时不记录）。
+//
+// 实测开关/类型勾选/采样限量均由日志服务根据日志设置判定，编排器只负责
+// 把 k6 逐请求明细转换成统一实体。
+type RequestLogWriter interface {
+	WriteRequestLogs(ctx context.Context, taskID int64, entries []domain.RequestLog) error
+}
+
+// RequestLogWriterFunc 函数适配器：用于把返回「实际落库条数」的服务方法适配为写入能力。
+type RequestLogWriterFunc func(ctx context.Context, taskID int64, entries []domain.RequestLog) error
+
+// WriteRequestLogs 实现 RequestLogWriter。
+func (f RequestLogWriterFunc) WriteRequestLogs(ctx context.Context, taskID int64, entries []domain.RequestLog) error {
+	return f(ctx, taskID, entries)
+}
+
 // Publisher 实时推送能力（由 ws.Hub 实现；nil 时不推送）。
 type Publisher interface {
 	Publish(channel, event string, payload any)
@@ -77,6 +93,8 @@ type Deps struct {
 	Report  ReportGenerator
 	// SecretDecoder 认证头解密器（nil 时脚本仅携带普通请求头）。
 	SecretDecoder SecretDecoder
+	// RequestLogs 请求详情写入能力（nil 时不记录请求详情）。
+	RequestLogs RequestLogWriter
 	// MaxVUs 并发数上限（配置项 k6.max_vus）。
 	MaxVUs int
 	// CleanPlanResolver 清理计划解析器（默认 cleaner.ParsePlan；测试可注入）。
@@ -87,15 +105,16 @@ type Deps struct {
 
 // Orchestrator 任务编排器。
 type Orchestrator struct {
-	store   Store
-	runner  EngineRunner
-	cleaner *cleaner.Cleaner
-	hub     Publisher
-	report  ReportGenerator
-	decoder SecretDecoder
-	maxVUs  int
-	resolve func(raw json.RawMessage, hosts []int64) (*cleaner.Plan, error)
-	now     func() time.Time
+	store       Store
+	runner      EngineRunner
+	cleaner     *cleaner.Cleaner
+	hub         Publisher
+	report      ReportGenerator
+	decoder     SecretDecoder
+	requestLogs RequestLogWriter
+	maxVUs      int
+	resolve     func(raw json.RawMessage, hosts []int64) (*cleaner.Plan, error)
+	now         func() time.Time
 
 	runs *registry
 	seq  *seqCounter
@@ -117,17 +136,18 @@ func New(deps Deps) *Orchestrator {
 		maxVUs = domain.DefaultMaxVUs
 	}
 	return &Orchestrator{
-		store:   deps.Store,
-		runner:  deps.Runner,
-		cleaner: deps.Cleaner,
-		hub:     deps.Hub,
-		report:  deps.Report,
-		decoder: deps.SecretDecoder,
-		maxVUs:  maxVUs,
-		resolve: resolve,
-		now:     now,
-		runs:    newRegistry(),
-		seq:     newSeqCounter(),
+		store:       deps.Store,
+		runner:      deps.Runner,
+		cleaner:     deps.Cleaner,
+		hub:         deps.Hub,
+		report:      deps.Report,
+		decoder:     deps.SecretDecoder,
+		requestLogs: deps.RequestLogs,
+		maxVUs:      maxVUs,
+		resolve:     resolve,
+		now:         now,
+		runs:        newRegistry(),
+		seq:         newSeqCounter(),
 	}
 }
 
@@ -262,6 +282,8 @@ func (o *Orchestrator) run(ctx context.Context, taskID int64) error {
 	if err != nil {
 		return fmt.Errorf("采集压测结果失败: %w", err)
 	}
+	// 逐请求明细：写库前由日志服务按日志设置检查开关/类型并采样限量。
+	o.recordRequestLogs(ctx, task, parsed)
 	wall := parsed.EndedAt.Sub(parsed.StartedAt)
 	metrics := evaluator.Normalize(toEvaluatorSamples(parsed.Samples), evaluator.Options{
 		Wall:   wall,

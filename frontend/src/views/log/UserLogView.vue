@@ -7,10 +7,17 @@
           管理员操作审计（5W1H）：操作人 / 时间 / IP / 动作 / 对象 / 结果。审计记录只读，HMAC 链式签名防篡改
         </span>
       </div>
-      <button type="button" class="ap-btn ap-btn-ghost" :disabled="logs.loading" @click="reload">
-        刷新
-      </button>
+      <div class="ap-actions">
+        <button type="button" class="ap-btn ap-btn-ghost" :disabled="logs.loading" @click="reload">
+          刷新
+        </button>
+        <button type="button" class="ap-btn ap-btn-ghost" title="导出功能规划中" disabled>
+          导出
+        </button>
+      </div>
     </div>
+
+    <LogTabs />
 
     <form class="ap-card ap-toolbar" @submit.prevent="search">
       <label class="ap-field">
@@ -94,6 +101,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import LogTabs from '@/components/log/LogTabs.vue'
 import UserLogTable from '@/components/log/UserLogTable.vue'
 import { useLogStore } from '@/stores/log'
 import { dateToRfc3339 } from '@/utils/format'

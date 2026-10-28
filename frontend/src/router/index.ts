@@ -58,6 +58,8 @@ const routes: RouteRecordRaw[] = [
       { path: 'logs/user', name: 'user-log', component: () => import('@/views/log/UserLogView.vue'), meta: { title: '用户日志', module: 'log.user' } },
       { path: 'logs/system', name: 'system-log', component: () => import('@/views/log/SystemLogView.vue'), meta: { title: '系统日志', module: 'log.system' } },
       { path: 'logs/test', name: 'test-log', component: () => import('@/views/log/TestLogView.vue'), meta: { title: '测试日志', module: 'log.test' } },
+      { path: 'logs/request', name: 'request-log', component: () => import('@/views/log/RequestLogView.vue'), meta: { title: '请求详情', module: 'log.request' } },
+      { path: 'logs/settings', name: 'log-settings', component: () => import('@/views/log/LogSettingView.vue'), meta: { title: '日志设置', module: 'setting.log' } },
       // 系统设置（敏感子模块：仅 write 授权可见）
       { path: 'settings/admins', name: 'admin-manage', component: () => import('@/views/setting/AdminManageView.vue'), meta: { title: '管理员管理', module: 'setting.admin', permission: 'write' } },
       { path: 'settings/certificates', name: 'certificate-manage', component: () => import('@/views/setting/CertificateManageView.vue'), meta: { title: '证书管理', module: 'setting.cert', permission: 'write' } },

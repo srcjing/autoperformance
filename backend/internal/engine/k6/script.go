@@ -38,6 +38,8 @@ type scriptRequest struct {
 	URL     string
 	Headers string // JSON 对象字面量（经 json.Marshal，安全）
 	Body    string
+	// InterfaceIDText 接口 ID 字符串（作为 k6 自定义 tag，支撑请求详情按接口定位）。
+	InterfaceIDText string
 }
 
 // scriptStage 模板中的加压档位。
@@ -96,13 +98,15 @@ const REQUESTS = [
     url: {{ js .URL }},
     headers: {{ .Headers }},
     body: {{ js .Body }},
+    interfaceId: {{ js .InterfaceIDText }},
   },
 {{- end }}
 ];
 
 export default function () {
   for (const req of REQUESTS) {
-    const params = { headers: req.headers };
+    // interface_id 标签用于把每条请求样本归属到具体接口（请求详情日志）。
+    const params = { headers: req.headers, tags: { interface_id: req.interfaceId } };
     if (REQUEST_TIMEOUT) { params.timeout = REQUEST_TIMEOUT; }
     let res;
     if (req.method === 'GET') {
@@ -202,10 +206,11 @@ func buildRequest(snap *domain.InterfaceSnapshot, targetHost string) (*scriptReq
 		return nil, fmt.Errorf("序列化请求头失败: %w", err)
 	}
 	return &scriptRequest{
-		Method:  method,
-		URL:     rawURL,
-		Headers: string(rawHeaders),
-		Body:    body,
+		Method:          method,
+		URL:             rawURL,
+		Headers:         string(rawHeaders),
+		Body:            body,
+		InterfaceIDText: strconv.FormatInt(snap.InterfaceID, 10),
 	}, nil
 }
 

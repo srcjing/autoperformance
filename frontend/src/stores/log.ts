@@ -1,7 +1,18 @@
 import { defineStore } from 'pinia'
-import { reactive } from 'vue'
-import { listSystemLogs, listTestLogs, listUserLogs } from '@/api/log'
+import { reactive, ref } from 'vue'
+import {
+  getLogSetting,
+  listRequestLogs,
+  listSystemLogs,
+  listTestLogs,
+  listUserLogs,
+  updateLogSetting,
+} from '@/api/log'
 import type {
+  LogSettingInfo,
+  LogSettingPayload,
+  RequestLogInfo,
+  RequestLogQuery,
   SystemLogInfo,
   SystemLogQuery,
   TestLogInfo,
@@ -10,9 +21,9 @@ import type {
   UserLogQuery,
 } from '@/types'
 
-// 日志 Store（frontend-structure.md §3）：用户/系统/测试三类日志的分页列表状态。
-// 三类日志相互独立（各自权限点 log.user / log.system / log.test）；
-// 页面局部状态（筛选条件输入、当前页签名）留在组件内。
+// 日志 Store（frontend-structure.md §3）：四类日志的分页列表状态 + 日志设置。
+// 四类日志相互独立（各自权限点 log.user / log.system / log.test / log.request）；
+// 日志设置为单例配置（setting.log:read 查看、setting.log:write 保存）。
 
 /** 单个日志列表的分页状态。 */
 export interface LogListState<T> {
@@ -32,6 +43,12 @@ export const useLogStore = defineStore('log', () => {
   const userLogs = reactive<LogListState<UserLogInfo>>(createListState<UserLogInfo>())
   const systemLogs = reactive<LogListState<SystemLogInfo>>(createListState<SystemLogInfo>())
   const testLogs = reactive<LogListState<TestLogInfo>>(createListState<TestLogInfo>())
+  const requestLogs = reactive<LogListState<RequestLogInfo>>(createListState<RequestLogInfo>())
+
+  /** 日志设置（null 表示尚未加载）。 */
+  const setting = ref<LogSettingInfo | null>(null)
+  const settingLoading = ref(false)
+  const settingSaving = ref(false)
 
   /** 用户日志列表（筛选 + 分页）。 */
   async function fetchUserLogs(query: UserLogQuery = {}): Promise<void> {
@@ -75,12 +92,55 @@ export const useLogStore = defineStore('log', () => {
     }
   }
 
+  /** 请求详情列表（任务/接口定位 + 筛选 + 分页）。 */
+  async function fetchRequestLogs(query: RequestLogQuery = {}): Promise<void> {
+    requestLogs.loading = true
+    try {
+      const res = await listRequestLogs(query)
+      requestLogs.list = res.list
+      requestLogs.total = res.total
+      requestLogs.page = res.page
+      requestLogs.pageSize = res.page_size
+    } finally {
+      requestLogs.loading = false
+    }
+  }
+
+  /** 读取日志设置。 */
+  async function fetchSetting(): Promise<void> {
+    settingLoading.value = true
+    try {
+      setting.value = await getLogSetting()
+    } finally {
+      settingLoading.value = false
+    }
+  }
+
+  /** 保存日志设置（成功后以服务端返回值为准）。 */
+  async function saveSetting(payload: LogSettingPayload): Promise<LogSettingInfo> {
+    settingSaving.value = true
+    try {
+      const saved = await updateLogSetting(payload)
+      setting.value = saved
+      return saved
+    } finally {
+      settingSaving.value = false
+    }
+  }
+
   return {
     userLogs,
     systemLogs,
     testLogs,
+    requestLogs,
+    setting,
+    settingLoading,
+    settingSaving,
     fetchUserLogs,
     fetchSystemLogs,
     fetchTestLogs,
+    fetchRequestLogs,
+    fetchSetting,
+    saveSetting,
   }
 })

@@ -36,9 +36,9 @@ type securedRoute struct {
 
 // securedRoutesForTest 汇总全部业务路由及其权限点（唯一事实源来自 router.go 的路由表）。
 //
-// 共 74 条（78 REST - 4 条认证接口；认证接口只要求登录态，不做子模块鉴权）。
+// 共 77 条（81 REST - 4 条认证接口；认证接口只要求登录态，不做子模块鉴权）。
 func securedRoutesForTest() []securedRoute {
-	out := make([]securedRoute, 0, 74)
+	out := make([]securedRoute, 0, 77)
 	for _, rt := range settingAdminRoutes() {
 		out = append(out, securedRoute{rt.Method, rt.Path, "setting.admin", "write"})
 	}
@@ -57,6 +57,9 @@ func securedRoutesForTest() []securedRoute {
 	for _, rt := range logRoutes() {
 		out = append(out, securedRoute{rt.Method, rt.Path, rt.Module, rt.Perm})
 	}
+	for _, rt := range logSettingRoutes() {
+		out = append(out, securedRoute{rt.Method, rt.Path, rt.Module, rt.Perm})
+	}
 	for _, rt := range settingSecretRoutes() {
 		out = append(out, securedRoute{rt.Method, rt.Path, rt.Module, rt.Perm})
 	}
@@ -73,8 +76,8 @@ func concretePath(p string) string {
 func TestSecurityAllBusinessRoutesRequireAuthN(t *testing.T) {
 	r, _ := newTestRouter(t, map[string]bool{})
 	routes := securedRoutesForTest()
-	if len(routes) != 74 {
-		t.Fatalf("受保护业务路由数 = %d, want 74（78 REST - 4 认证）", len(routes))
+	if len(routes) != 77 {
+		t.Fatalf("受保护业务路由数 = %d, want 77（81 REST - 4 认证）", len(routes))
 	}
 
 	for _, rt := range routes {
@@ -186,8 +189,8 @@ func TestSecurityLogRoutesAreReadOnly(t *testing.T) {
 			t.Fatalf("日志路由出现非 GET 方法: %s %s", rt.Method, rt.Path)
 		}
 	}
-	if logRouteCount != 3 {
-		t.Fatalf("日志查询路由数 = %d, want 3（user/system/test）", logRouteCount)
+	if logRouteCount != 4 {
+		t.Fatalf("日志查询路由数 = %d, want 4（user/system/test/request）", logRouteCount)
 	}
 
 	// 任意日志子模块均无 DELETE/PUT/PATCH 端点（路由层兜底）。

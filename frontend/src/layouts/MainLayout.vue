@@ -35,13 +35,50 @@
     </aside>
 
     <div class="main">
-      <!-- 顶栏 -->
+      <!-- 顶栏：面包屑 + 右侧信息区（消息图标 + 用户名下拉） -->
       <header class="header">
         <div class="breadcrumb">{{ currentTitle }}</div>
-        <div class="user">
-          <span class="user-name">{{ displayName }}</span>
-          <RouterLink class="header-action" to="/change-password">修改密码</RouterLink>
-          <button type="button" class="header-action logout" @click="onLogout">退出登录</button>
+        <div ref="headerRight" class="header-right">
+          <!-- 消息（占位：暂未接入站内通知） -->
+          <div class="dropdown">
+            <button
+              type="button"
+              class="icon-btn"
+              :class="{ active: openMenu === 'msg' }"
+              title="消息"
+              @click.stop="toggleMenu('msg')"
+            >
+              <span class="nav-icon" v-html="ICONS.bell"></span>
+              <span class="dot"></span>
+            </button>
+            <div v-if="openMenu === 'msg'" class="menu">
+              <p class="menu-empty">暂无新消息（站内通知后续接入）</p>
+            </div>
+          </div>
+
+          <!-- 用户下拉：账号信息 / 修改密码 / 退出登录 -->
+          <div class="dropdown">
+            <button
+              type="button"
+              class="user-trigger"
+              :class="{ active: openMenu === 'user' }"
+              @click.stop="toggleMenu('user')"
+            >
+              <span class="avatar">{{ avatarText }}</span>
+              <span class="user-name">{{ displayName }}</span>
+              <span class="trigger-caret" :class="{ open: openMenu === 'user' }">▾</span>
+            </button>
+            <div v-if="openMenu === 'user'" class="menu menu-user">
+              <div class="menu-head">
+                <div class="menu-name">{{ displayName }}</div>
+                <div class="menu-sub">{{ auth.user?.username || '-' }}</div>
+              </div>
+              <RouterLink class="menu-item" to="/change-password" @click="closeMenu">
+                修改密码
+              </RouterLink>
+              <button type="button" class="menu-item danger" @click="onLogout">退出登录</button>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -54,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import type { PermissionLevel } from '@/utils/permission'
@@ -105,6 +142,8 @@ const navGroups: NavGroup[] = [
       { path: '/logs/user', label: '用户日志', module: 'log.user' },
       { path: '/logs/system', label: '系统日志', module: 'log.system' },
       { path: '/logs/test', label: '测试日志', module: 'log.test' },
+      { path: '/logs/request', label: '请求详情', module: 'log.request' },
+      { path: '/logs/settings', label: '日志设置', module: 'setting.log' },
     ],
   },
   {
@@ -147,6 +186,8 @@ const ICONS: Record<string, string> = {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8"/></svg>',
   '日志管理':
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+  bell:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>',
   '系统设置':
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
 }
@@ -160,8 +201,30 @@ function toggleGroup(title: string): void {
 
 const currentTitle = computed(() => (route.meta.title as string) || '')
 const displayName = computed(() => auth.user?.name || auth.user?.username || '未登录')
+const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase())
+
+// 右上角下拉（消息 / 用户）：同刻仅展开一个，点击外部区域关闭。
+const headerRight = ref<HTMLElement | null>(null)
+const openMenu = ref<'' | 'msg' | 'user'>('')
+
+function toggleMenu(menu: 'msg' | 'user'): void {
+  openMenu.value = openMenu.value === menu ? '' : menu
+}
+
+function closeMenu(): void {
+  openMenu.value = ''
+}
+
+function onDocumentClick(event: MouseEvent): void {
+  if (!headerRight.value) return
+  if (!headerRight.value.contains(event.target as Node)) closeMenu()
+}
+
+onMounted(() => document.addEventListener('click', onDocumentClick))
+onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
 
 async function onLogout(): Promise<void> {
+  closeMenu()
   await auth.signOut()
   await router.replace({ name: 'login' })
 }
@@ -326,29 +389,163 @@ async function onLogout(): Promise<void> {
   color: #374151;
 }
 
-.user {
+/* 右侧信息区：消息图标 + 用户名下拉（对齐参考后台） */
+.header-right {
   display: flex;
   align-items: center;
-  gap: 14px;
-  font-size: 14px;
+  gap: 8px;
+}
+
+.dropdown {
+  position: relative;
+}
+
+.icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: none;
   color: #6b7280;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.icon-btn:hover,
+.icon-btn.active {
+  background: #f3f4f6;
+  color: var(--ap-primary);
+}
+.icon-btn .nav-icon,
+.icon-btn .nav-icon svg {
+  width: 17px;
+  height: 17px;
+}
+.icon-btn .dot {
+  position: absolute;
+  top: 6px;
+  right: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+  border: 1px solid #fff;
+}
+
+.user-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+  font-family: inherit;
+}
+.user-trigger:hover,
+.user-trigger.active {
+  background: #f3f4f6;
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--ap-primary);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .user-name {
   color: #374151;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.header-action {
+.trigger-caret {
+  font-size: 11px;
+  color: #9ca3af;
+  transition: transform 0.2s;
+}
+.trigger-caret.open {
+  transform: rotate(180deg);
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 180px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 20, 36, 0.12);
+}
+
+.menu-user {
+  min-width: 200px;
+}
+
+.menu-head {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f1f2f4;
+  margin-bottom: 4px;
+}
+.menu-name {
+  font-size: 13px;
+  color: #1f2933;
+  font-weight: 600;
+}
+.menu-sub {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
   border: none;
+  border-radius: 6px;
   background: none;
-  padding: 0;
-  font-size: 14px;
-  color: var(--ap-primary);
+  text-align: left;
+  font-size: 13px;
+  color: #374151;
+  font-family: inherit;
   cursor: pointer;
 }
-
-.logout {
+.menu-item:hover {
+  background: #f3f4f6;
+  color: var(--ap-primary);
+}
+.menu-item.danger {
   color: #b91c1c;
+}
+.menu-item.danger:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.menu-empty {
+  margin: 0;
+  padding: 10px;
+  font-size: 13px;
+  color: #6b7280;
+  white-space: nowrap;
 }
 
 .content {

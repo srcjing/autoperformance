@@ -8,6 +8,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -31,10 +32,11 @@ type AuthRepo interface {
 	LoadRolesByAdmin(ctx context.Context, adminID int64) ([]domain.Role, error)
 }
 
-// LogRepo 日志仓储接口（审计链追加 + 三类日志查询，INV-8：只追加、不可改）。
+// LogRepo 日志仓储接口（审计链追加 + 四类日志查询 + 日志设置/清理）。
 //
-// 查询方法对应 Phase 6（用户/系统/测试日志检索）与系统日志写入（启动/重启/停止），
-// 接口不提供任何 UPDATE/DELETE 能力（DES-T-006）。
+// 查询方法对应用户/系统/测试/请求详情日志检索与系统日志写入（启动/重启/停止），
+// 审计表（user_log）不提供任何 UPDATE/DELETE 能力（DES-T-006）；
+// 仅日志设置触发的过期/超量清理（PurgeLogs）作用于 request_log/test_log/system_log。
 type LogRepo interface {
 	// LastAuditHash 返回最近一条用户日志的 hash（无记录返回 nil, nil）。
 	LastAuditHash(ctx context.Context) ([]byte, error)
@@ -50,6 +52,16 @@ type LogRepo interface {
 	AppendSystemLog(ctx context.Context, entry *domain.SystemLog) error
 	// LastSystemEvent 返回最近一条系统日志事件（无记录返回 ""）。
 	LastSystemEvent(ctx context.Context) (string, error)
+	// AppendRequestLogs 批量写入压测请求详情（request_log）。
+	AppendRequestLogs(ctx context.Context, entries []domain.RequestLog) error
+	// QueryRequestLogs 查询请求详情（任务/接口/时间范围 + 分页）。
+	QueryRequestLogs(ctx context.Context, q domain.RequestLogQuery) ([]domain.RequestLog, int64, error)
+	// GetLogSetting 读取日志设置（单行；无记录返回 nil, nil）。
+	GetLogSetting(ctx context.Context) (*domain.LogSetting, error)
+	// SaveLogSetting 保存日志设置（单行 upsert）。
+	SaveLogSetting(ctx context.Context, setting *domain.LogSetting) error
+	// PurgeLogs 按保留策略（截止时间 + 最大条数）清理日志，返回各表删除行数。
+	PurgeLogs(ctx context.Context, cutoff time.Time, maxCount int64) (domain.PurgeResult, error)
 }
 
 // Repository 仓储聚合接口：认证/日志仓储 + 事务 + 连接生命周期。

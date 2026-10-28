@@ -7,10 +7,17 @@
           任务执行过程日志：按任务定位，seq 为任务内增量序号；实时日志同时经 WebSocket 推送至任务详情
         </span>
       </div>
-      <button type="button" class="ap-btn ap-btn-ghost" :disabled="logs.loading" @click="reload">
-        刷新
-      </button>
+      <div class="ap-actions">
+        <button type="button" class="ap-btn ap-btn-ghost" :disabled="logs.loading" @click="reload">
+          刷新
+        </button>
+        <button type="button" class="ap-btn ap-btn-ghost" title="导出功能规划中" disabled>
+          导出
+        </button>
+      </div>
     </div>
+
+    <LogTabs />
 
     <form class="ap-card ap-toolbar" @submit.prevent="search">
       <label class="ap-field">
@@ -77,6 +84,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import LogTabs from '@/components/log/LogTabs.vue'
 import TestLogTable from '@/components/log/TestLogTable.vue'
 import { useLogStore } from '@/stores/log'
 import { dateToRfc3339 } from '@/utils/format'

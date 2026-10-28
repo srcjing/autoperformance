@@ -18,14 +18,53 @@ import (
 type stubService struct {
 	Service
 
-	userPage   *logsvc.UserLogPage
-	systemPage *logsvc.SystemLogPage
-	testPage   *logsvc.TestLogPage
-	err        error
+	userPage    *logsvc.UserLogPage
+	systemPage  *logsvc.SystemLogPage
+	testPage    *logsvc.TestLogPage
+	requestPage *logsvc.RequestLogPage
+	setting     *domain.LogSetting
+	err         error
+	// updateErr 模拟保存设置失败（服务层校验/依赖异常）。
+	updateErr error
 
-	lastUserQuery   domain.UserLogQuery
-	lastSystemQuery domain.SystemLogQuery
-	lastTestQuery   domain.TestLogQuery
+	lastUserQuery     domain.UserLogQuery
+	lastSystemQuery   domain.SystemLogQuery
+	lastTestQuery     domain.TestLogQuery
+	lastRequestQuery  domain.RequestLogQuery
+	lastSettingUpdate domain.LogSetting
+}
+
+// ListRequestLogs 请求详情查询桩。
+func (s *stubService) ListRequestLogs(_ context.Context, q domain.RequestLogQuery) (*logsvc.RequestLogPage, error) {
+	s.lastRequestQuery = q
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.requestPage, nil
+}
+
+// GetLogSetting 读取日志设置桩（nil 时返回默认设置，与服务层一致）。
+func (s *stubService) GetLogSetting(_ context.Context) (*domain.LogSetting, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.setting == nil {
+		setting := domain.DefaultLogSetting()
+		return &setting, nil
+	}
+	cp := *s.setting
+	return &cp, nil
+}
+
+// UpdateLogSetting 保存日志设置桩。
+func (s *stubService) UpdateLogSetting(_ context.Context, in domain.LogSetting) (*domain.LogSetting, error) {
+	s.lastSettingUpdate = in
+	if s.updateErr != nil {
+		return nil, s.updateErr
+	}
+	cp := in
+	s.setting = &cp
+	return &cp, nil
 }
 
 func (s *stubService) ListUserLogs(_ context.Context, q domain.UserLogQuery) (*logsvc.UserLogPage, error) {
@@ -60,6 +99,9 @@ func newLogRouter(svc Service) *gin.Engine {
 	r.GET("/api/v1/logs/user", h.ListUserLogs)
 	r.GET("/api/v1/logs/system", h.ListSystemLogs)
 	r.GET("/api/v1/logs/test", h.ListTestLogs)
+	r.GET("/api/v1/logs/request", h.ListRequestLogs)
+	r.GET("/api/v1/log-settings", h.GetLogSetting)
+	r.PUT("/api/v1/log-settings", h.UpdateLogSetting)
 	return r
 }
 

@@ -40,11 +40,13 @@ type AuditStore interface {
 	AppendUserLog(ctx context.Context, entry *domain.AuditLog) error
 }
 
-// Service 日志服务（审计链写入 + 三类日志查询 + 系统日志事件）。
+// Service 日志服务（审计链写入 + 四类日志查询 + 请求详情/日志设置 + 系统日志事件）。
 type Service struct {
 	store AuditStore
 	// query 日志查询/系统日志仓储（DB 不可用时为 nil，查询降级为依赖异常）。
 	query QueryStore
+	// request 请求详情与日志设置仓储（DB 不可用时为 nil，写入静默跳过、查询降级为依赖异常）。
+	request RequestStore
 
 	// mu 串行化本实例内的追加，避免并发请求读到同一个 prevHash 造成链分叉。
 	// 跨实例（分布式部署）追加需由 DB advisory lock 兜底，见 repository.AppendUserLog。

@@ -174,7 +174,7 @@ func NewRouter(deps Deps) *gin.Engine {
 		if deps.Logs != nil {
 			logHandler = logapi.New(deps.Logs)
 		}
-		for _, rt := range logRoutes() {
+		for _, rt := range append(logRoutes(), logSettingRoutes()...) {
 			fn := h.NotImplemented
 			if logHandler != nil {
 				handlerFn, logFn := rt.Handler, logHandler
@@ -368,18 +368,30 @@ func reportRoutes() []reportRoute {
 type logRoute struct {
 	Method  string
 	Path    string
-	Module  string // log.user | log.system | log.test（api-contract §5.1）
+	Module  string // log.user | log.system | log.test | log.request（api-contract §5.1）
 	Perm    string // read（日志默认只读，api-contract §5.3）
 	Handler func(*logapi.Handler, *gin.Context)
 }
 
-// logRoutes 日志管理 3 条路由（Phase 6 任务 6.1）。
+// logRoutes 日志管理 4 条只读查询路由（用户/系统/测试/请求详情）。
 // 仅注册 GET 查询：无删除/修改端点，审计防篡改靠 HMAC 链 + DB 触发器（DES-T-006）。
 func logRoutes() []logRoute {
 	return []logRoute{
 		{"GET", "/logs/user", "log.user", "read", (*logapi.Handler).ListUserLogs},
 		{"GET", "/logs/system", "log.system", "read", (*logapi.Handler).ListSystemLogs},
 		{"GET", "/logs/test", "log.test", "read", (*logapi.Handler).ListTestLogs},
+		{"GET", "/logs/request", "log.request", "read", (*logapi.Handler).ListRequestLogs},
+	}
+}
+
+// logSettingRoutes 日志设置 2 条路由（读写分离：查看 read，修改 write）。
+//
+// 日志设置归入 setting.log（日志管理 · 配置）子模块：只读角色可查看当前留存策略，
+// 修改留存天数/最大条数/启用类型需 write，避免无关角色篡改取证范围。
+func logSettingRoutes() []logRoute {
+	return []logRoute{
+		{"GET", "/log-settings", "setting.log", "read", (*logapi.Handler).GetLogSetting},
+		{"PUT", "/log-settings", "setting.log", "write", (*logapi.Handler).UpdateLogSetting},
 	}
 }
 

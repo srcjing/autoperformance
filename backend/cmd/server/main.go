@@ -36,6 +36,7 @@ import (
 	"auto_performance/internal/cleaner"
 	"auto_performance/internal/config"
 	"auto_performance/internal/crypto"
+	"auto_performance/internal/domain"
 	"auto_performance/internal/engine/k6"
 	"auto_performance/internal/errcode"
 	"auto_performance/internal/orchestrator"
@@ -177,8 +178,8 @@ func serve(cfg *config.Config) {
 	if db != nil {
 		repo := repository.NewRepository(db)
 		authService = authsvc.New(repo, authsvc.DefaultPermCacheTTL)
-		// 审计/日志服务：审计链 HMAC 追加（INV-8）+ 三类日志查询与系统启停事件（Phase 6）。
-		auditService = logsvc.NewService(repo).WithQueryStore(repo)
+		// 审计/日志服务：审计链 HMAC 追加（INV-8）+ 四类日志查询 + 请求详情/日志设置。
+		auditService = logsvc.NewService(repo).WithQueryStore(repo).WithRequestStore(repo)
 		// 管理员/角色/权限矩阵：角色变更经 authService 即时失效权限缓存（INV-1）。
 		// 证书/SSH 私钥加密密钥（KEK）来自 security.kek_path / secret_key_env（DES-I-008）。
 		kek, kekSource := settingsKEK(cfg)
@@ -234,6 +235,16 @@ func serve(cfg *config.Config) {
 		if reportService != nil {
 			reportDeps = reportService
 		}
+		// 请求详情写入能力（受日志设置控制：开关/类型/采样限量在服务层判定）。
+		var requestLogWriter orchestrator.RequestLogWriter
+		if auditService != nil {
+			writer := auditService
+			requestLogWriter = orchestrator.RequestLogWriterFunc(
+				func(ctx context.Context, taskID int64, entries []domain.RequestLog) error {
+					_, err := writer.WriteRequestLogs(ctx, taskID, entries)
+					return err
+				})
+		}
 		orchestratorService = orchestrator.New(orchestrator.Deps{
 			Store:         repo,
 			Runner:        k6Runner,
@@ -242,6 +253,7 @@ func serve(cfg *config.Config) {
 			Report:        reportDeps,
 			MaxVUs:        cfg.K6.MaxVUs,
 			SecretDecoder: interfaceHeaderDecoder(headerKey),
+			RequestLogs:   requestLogWriter,
 		})
 		// 测试管理：模板/任务 + 执行控制（Phase 4）；环境互斥/快照/状态机均在服务层强制。
 		taskService = testingsvc.NewTaskService(repo, orchestratorService).WithMaxVUs(cfg.K6.MaxVUs)
@@ -264,6 +276,18 @@ func serve(cfg *config.Config) {
 	)
 	log.Printf("审计链 HMAC 密钥指纹: %s（来源: %s）",
 		logsvc.Fingerprint(auditKey), auditKeySource(cfg))
+
+	// 日志保留策略：启动时按当前日志设置清理一次（过期 + 超量），失败仅告警。
+	if auditService != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if res, err := auditService.PurgeLogs(ctx); err != nil {
+			log.Printf("警告: 日志保留策略清理失败（不影响启动）: %v", err)
+		} else if res.RequestLogs+res.TestLogs+res.SystemLogs > 0 {
+			log.Printf("日志清理完成：请求详情 %d 条 / 测试日志 %d 条 / 系统日志 %d 条",
+				res.RequestLogs, res.TestLogs, res.SystemLogs)
+		}
+		cancel()
+	}
 
 	// 系统设置：确保内置自签证书存在（不可删除，仅可重新初始化有效期）。
 	if settingService != nil {

@@ -7,10 +7,17 @@
           服务运行状态记录：启动 / 重启 / 停止；上次进程未落 stop 记录时按「重启」告警
         </span>
       </div>
-      <button type="button" class="ap-btn ap-btn-ghost" :disabled="logs.loading" @click="reload">
-        刷新
-      </button>
+      <div class="ap-actions">
+        <button type="button" class="ap-btn ap-btn-ghost" :disabled="logs.loading" @click="reload">
+          刷新
+        </button>
+        <button type="button" class="ap-btn ap-btn-ghost" title="导出功能规划中" disabled>
+          导出
+        </button>
+      </div>
     </div>
+
+    <LogTabs />
 
     <form class="ap-card ap-toolbar" @submit.prevent="search">
       <label class="ap-field">
@@ -77,6 +84,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import LogTabs from '@/components/log/LogTabs.vue'
 import SystemLogTable from '@/components/log/SystemLogTable.vue'
 import { useLogStore } from '@/stores/log'
 import { dateToRfc3339 } from '@/utils/format'

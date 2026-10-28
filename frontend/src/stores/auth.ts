@@ -31,6 +31,8 @@ export const useAuthStore = defineStore('auth', () => {
     { path: '/logs/user', module: 'log.user' },
     { path: '/logs/system', module: 'log.system' },
     { path: '/logs/test', module: 'log.test' },
+    { path: '/logs/request', module: 'log.request' },
+    { path: '/logs/settings', module: 'setting.log' },
     { path: '/settings/admins', module: 'setting.admin', permission: 'write' },
     { path: '/settings/certificates', module: 'setting.cert', permission: 'write' },
     { path: '/settings/ssh-hosts', module: 'setting.ssh', permission: 'write' },

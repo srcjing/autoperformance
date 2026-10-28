@@ -742,6 +742,54 @@ export interface TestLogQuery extends LogQuery {
   task_id?: string
 }
 
+/** 日志类型（log_setting.log_types，PRD §3.5 日志设置）。 */
+export type LogType = 'user' | 'system' | 'test' | 'request'
+
+/** 请求详情（request_log）：压测时对被测接口的逐请求明细。 */
+export interface RequestLogInfo {
+  id: string
+  task_id?: string
+  interface_id?: string
+  seq: number
+  occurred_at: string
+  method: string
+  url: string
+  request_body?: string
+  response_status: number
+  response_body?: string
+  error_code?: string
+  error_message?: string
+  duration_ms: number
+}
+
+/** 请求详情查询参数（任务/接口定位 + 关键字/时间范围 + 分页）。 */
+export interface RequestLogQuery {
+  task_id?: string
+  interface_id?: string
+  keyword?: string
+  start_time?: string
+  end_time?: string
+  page?: number
+  page_size?: number
+}
+
+/** 日志设置（GET/PUT /log-settings）：服务开关 + 最大条数 + 存储天数 + 启用类型。 */
+export interface LogSettingInfo {
+  enabled: boolean
+  max_count: number
+  retention_days: number
+  log_types: LogType[]
+  updated_at?: string
+}
+
+/** 日志设置保存载荷（未提供的字段沿用服务端当前值）。 */
+export interface LogSettingPayload {
+  enabled?: boolean
+  max_count?: number
+  retention_days?: number
+  log_types?: LogType[]
+}
+
 // ===================== 实时通道（api-contract §2.4 / frontend-structure §3.1） =====================
 
 /** WebSocket 推送信封：`{channel,event,data,time}`。 */

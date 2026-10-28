@@ -4,6 +4,49 @@ import type { BadgeMeta } from './report'
 // 日志管理展示元数据与错误文案（权限点 log.user / log.system / log.test，均只读）。
 // 日志级别着色统一走 ap-badge-*：info=蓝、warn=黄、error=红。
 
+/** HTTP 方法着色（读操作蓝、写操作黄/红）。 */
+export function httpMethodBadge(method?: string): BadgeMeta {
+  switch ((method || '').toUpperCase()) {
+    case 'GET':
+    case 'HEAD':
+      return { label: 'GET', badge: 'ap-badge-info' }
+    case 'POST':
+      return { label: 'POST', badge: 'ap-badge-success' }
+    case 'PUT':
+    case 'PATCH':
+      return { label: (method || '').toUpperCase(), badge: 'ap-badge-warn' }
+    case 'DELETE':
+      return { label: 'DELETE', badge: 'ap-badge-danger' }
+    default:
+      return { label: (method || '-').toUpperCase(), badge: 'ap-badge-muted' }
+  }
+}
+
+/** HTTP 状态码着色：2xx/3xx 正常、4xx 警告、5xx/0（网络失败）异常。 */
+export function httpStatusBadge(status?: number): BadgeMeta {
+  const code = status ?? 0
+  if (code >= 200 && code < 400) return { label: String(code), badge: 'ap-badge-success' }
+  if (code >= 400 && code < 500) return { label: String(code), badge: 'ap-badge-warn' }
+  if (code >= 500) return { label: String(code), badge: 'ap-badge-danger' }
+  return { label: code === 0 ? '失败' : String(code), badge: 'ap-badge-danger' }
+}
+
+/** 耗时展示（毫秒 → 人类可读）。 */
+export function formatDurationMs(ms?: number): string {
+  const value = ms ?? 0
+  if (value <= 0) return '-'
+  if (value < 1000) return `${value} ms`
+  return `${(value / 1000).toFixed(2)} s`
+}
+
+/** 日志类型选项（日志设置勾选，与后端 domain.LogType* 对齐）。 */
+export const LOG_TYPE_OPTIONS: Array<{ value: 'user' | 'system' | 'test' | 'request'; label: string }> = [
+  { value: 'user', label: '用户日志（操作审计）' },
+  { value: 'system', label: '系统日志（运行状态）' },
+  { value: 'test', label: '测试日志（任务执行）' },
+  { value: 'request', label: '请求详情（压测逐请求）' },
+]
+
 /** 日志级别元数据（info / warn / error）。 */
 export const LOG_LEVEL_META: Record<string, BadgeMeta> = {
   info: { label: 'INFO', badge: 'ap-badge-info' },
@@ -149,6 +192,8 @@ export function describeLogError(error: unknown, fallback: string): string {
       return '关联对象不存在或已被删除'
     case 10201:
       return '无权访问该日志子模块，请联系管理员授权'
+    case 10602:
+      return '服务依赖未就绪（如数据库不可用），请稍后重试'
     default:
       return error.message || fallback
   }
