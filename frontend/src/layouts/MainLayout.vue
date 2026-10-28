@@ -168,16 +168,18 @@ async function onLogout(): Promise<void> {
   padding: 12px 0;
 }
 
+/* 一级模块：独立分组标题（加粗、亮色、分组上下间距） */
 .nav-group-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: calc(100% - 16px);
-  margin: 2px 8px;
-  padding: 10px 12px;
+  margin: 8px 8px 2px;
+  padding: 9px 12px;
   font-size: 14px;
-  font-weight: 600;
-  color: #e5e7eb;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #f9fafb;
   background: none;
   border: none;
   border-radius: 6px;
@@ -188,37 +190,47 @@ async function onLogout(): Promise<void> {
 }
 .nav-group-title:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+}
+.nav-group:first-of-type .nav-group-title {
+  margin-top: 4px;
 }
 .caret {
   font-size: 11px;
   transition: transform 0.2s;
-  color: #6b7280;
+  color: #9ca3af;
 }
 .caret.collapsed {
   transform: rotate(-90deg);
 }
 .nav-single {
-  margin: 2px 8px 6px;
-  padding: 10px 12px;
+  margin: 4px 8px 8px;
+  padding: 9px 12px;
   border-radius: 6px;
-  font-weight: 600;
+  font-weight: 700;
+  color: #f9fafb;
 }
+
+/* 二级子项：左侧树形竖线 + 缩进 + 更小更暗，与一级明显区分 */
 .nav-items {
   display: flex;
   flex-direction: column;
+  gap: 1px;
+  margin: 2px 8px 6px 22px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
 }
-
 .nav-item {
   display: block;
-  padding: 9px 16px 9px 28px;
-  font-size: 14px;
-  color: #d1d5db;
-  transition: background 0.15s;
+  padding: 7px 10px;
+  border-radius: 5px;
+  font-size: 13px;
+  color: #9ca3af;
+  transition: background 0.15s, color 0.15s;
 }
 
 .nav-item:hover {
   background: rgba(255, 255, 255, 0.06);
+  color: #e5e7eb;
 }
 
 .nav-item.active {
