@@ -1,5 +1,5 @@
 <template>
-  <div v-if="open" class="ap-dialog-mask" @click.self="onMaskClick">
+  <div v-if="open" class="ap-dialog-mask">
     <div class="ap-dialog cert-import" role="dialog" aria-modal="true">
       <div class="ap-dialog-header">
         <span>导入证书</span>
@@ -149,9 +149,6 @@ function onKeyChange(event: Event): void {
   keyFile.value = selected
 }
 
-function onMaskClick(): void {
-  if (!props.saving) emit('close')
-}
 
 function onSubmit(): void {
   if (props.saving) return

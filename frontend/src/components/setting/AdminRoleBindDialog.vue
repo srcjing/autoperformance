@@ -1,5 +1,5 @@
 <template>
-  <div v-if="open" class="ap-dialog-mask" @click.self="onMaskClick">
+  <div v-if="open" class="ap-dialog-mask">
     <div class="ap-dialog bind-dialog" role="dialog" aria-modal="true">
       <div class="ap-dialog-header">
         <span>角色授权 · {{ admin?.username ?? '' }}</span>
@@ -102,9 +102,6 @@ function scopeText(role: RoleInfo): string {
   return `可写 ${scope.write} · 只读 ${scope.read}`
 }
 
-function onMaskClick(): void {
-  if (!props.saving) emit('close')
-}
 
 function onSubmit(): void {
   // 按角色列表顺序回传，保证请求可读且与服务端顺序无关。

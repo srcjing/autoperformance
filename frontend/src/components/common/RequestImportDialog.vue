@@ -1,5 +1,5 @@
 <template>
-  <div v-if="open" class="ap-dialog-mask" @click.self="close">
+  <div v-if="open" class="ap-dialog-mask">
     <div class="ap-dialog import-dialog">
       <div class="ap-dialog-header">
         <span>导入请求</span>

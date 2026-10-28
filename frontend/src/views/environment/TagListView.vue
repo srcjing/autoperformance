@@ -30,7 +30,7 @@
     />
 
     <!-- 标签新建/编辑弹窗（标签字段仅名称/颜色/说明） -->
-    <div v-if="dialogOpen" class="ap-dialog-mask" @click.self="closeDialog">
+    <div v-if="dialogOpen" class="ap-dialog-mask">
       <div class="ap-dialog" role="dialog" aria-modal="true">
         <div class="ap-dialog-header">
           <span>{{ editing ? '编辑标签' : '新建标签' }}</span>

@@ -1,5 +1,5 @@
 <template>
-  <div v-if="open" class="ap-dialog-mask" @click.self="onMaskClick">
+  <div v-if="open" class="ap-dialog-mask">
     <div class="ap-dialog password-dialog" role="dialog" aria-modal="true">
       <div class="ap-dialog-header">
         <span>重置密码 · {{ admin?.username ?? '' }}</span>
@@ -85,9 +85,6 @@ watch(
   { immediate: true },
 )
 
-function onMaskClick(): void {
-  if (!props.saving) emit('close')
-}
 
 function onSubmit(): void {
   const passwordError = validatePasswordStrength(newPassword.value)

@@ -1,5 +1,5 @@
 <template>
-  <div v-if="open" class="ap-drawer-mask" @click.self="emit('close')">
+  <div v-if="open" class="ap-drawer-mask">
     <aside class="ap-drawer" role="dialog" aria-modal="true">
       <div class="ap-dialog-header">
         <span>标签「{{ tag?.name }}」关联环境（{{ total }}）</span>

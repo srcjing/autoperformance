@@ -1,5 +1,5 @@
 <template>
-  <div v-if="open" class="ap-dialog-mask" @click.self="onClose">
+  <div v-if="open" class="ap-dialog-mask">
     <div class="ap-dialog" role="dialog" aria-modal="true">
       <div class="ap-dialog-header">
         <span>阈值配置 · {{ item?.name ?? '' }}</span>

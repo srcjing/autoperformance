@@ -1,5 +1,5 @@
 <template>
-  <div v-if="open" class="ap-dialog-mask" @click.self="onMaskClick">
+  <div v-if="open" class="ap-dialog-mask">
     <div class="ap-dialog ssh-form" role="dialog" aria-modal="true">
       <div class="ap-dialog-header">
         <span>{{ isEdit ? '编辑 SSH/Host' : '添加 SSH/Host' }}</span>
@@ -156,9 +156,6 @@ function onTypeChange(): void {
   }
 }
 
-function onMaskClick(): void {
-  if (!props.saving) emit('close')
-}
 
 function onSubmit(): void {
   if (!host.value.trim()) {

@@ -1,5 +1,5 @@
 <template>
-  <div v-if="open" class="ap-dialog-mask" @click.self="onMaskClick">
+  <div v-if="open" class="ap-dialog-mask">
     <div class="ap-dialog ssh-import" role="dialog" aria-modal="true">
       <div class="ap-dialog-header">
         <span>批量导入 SSH/Host</span>
@@ -97,9 +97,6 @@ function onFileChange(event: Event): void {
   file.value = selected
 }
 
-function onMaskClick(): void {
-  if (!props.saving) emit('close')
-}
 
 function onSubmit(): void {
   if (props.saving) return

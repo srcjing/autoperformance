@@ -1,5 +1,5 @@
 <template>
-  <div v-if="open && cert" class="ap-dialog-mask" @click.self="onMaskClick">
+  <div v-if="open && cert" class="ap-dialog-mask">
     <div class="ap-dialog reinit-dialog" role="dialog" aria-modal="true">
       <div class="ap-dialog-header">
         <span>重新初始化内置证书</span>
@@ -49,7 +49,7 @@ import type { CertificateInfo } from '@/types'
 import { certStatusMeta } from '@/utils/setting'
 
 // 内置证书重新初始化确认（非内置证书由服务端返回 10401，前端不展示该入口）。
-const props = defineProps<{
+defineProps<{
   open: boolean
   cert: CertificateInfo | null
   saving: boolean
@@ -61,9 +61,6 @@ const emit = defineEmits<{
   (e: 'confirm'): void
 }>()
 
-function onMaskClick(): void {
-  if (!props.saving) emit('close')
-}
 </script>
 
 <style scoped>

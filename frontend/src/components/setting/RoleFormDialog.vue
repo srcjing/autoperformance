@@ -1,5 +1,5 @@
 <template>
-  <div v-if="open" class="ap-dialog-mask" @click.self="onMaskClick">
+  <div v-if="open" class="ap-dialog-mask">
     <div class="ap-dialog role-form" role="dialog" aria-modal="true">
       <div class="ap-dialog-header">
         <span>{{ isEdit ? '编辑角色' : '新建角色' }}</span>
@@ -121,9 +121,6 @@ function grantsFromKeys(keys: string[], modules: PermissionModule[]): Permission
   return out
 }
 
-function onMaskClick(): void {
-  if (!props.saving) emit('close')
-}
 
 function onSubmit(): void {
   const trimmedName = name.value.trim()

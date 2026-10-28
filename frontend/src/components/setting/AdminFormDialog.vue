@@ -1,5 +1,5 @@
 <template>
-  <div v-if="open" class="ap-dialog-mask" @click.self="onMaskClick">
+  <div v-if="open" class="ap-dialog-mask">
     <div class="ap-dialog admin-form" role="dialog" aria-modal="true">
       <div class="ap-dialog-header">
         <span>{{ isEdit ? '编辑管理员' : '新建管理员' }}</span>
@@ -131,9 +131,6 @@ function reset(): void {
   formError.value = ''
 }
 
-function onMaskClick(): void {
-  if (!props.saving) emit('close')
-}
 
 function onSubmit(): void {
   const trimmedName = name.value.trim()

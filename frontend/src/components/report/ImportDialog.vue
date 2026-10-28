@@ -1,5 +1,5 @@
 <template>
-  <div v-if="open" class="ap-dialog-mask" @click.self="onMaskClick">
+  <div v-if="open" class="ap-dialog-mask">
     <div class="ap-dialog import-dialog" role="dialog" aria-label="导入报告">
       <div class="ap-dialog-header">
         <span>导入报告</span>
@@ -100,9 +100,6 @@ function onFileChange(event: Event): void {
   file.value = selected
 }
 
-function onMaskClick(): void {
-  if (!props.saving) emit('close')
-}
 
 function onSubmit(): void {
   if (props.saving) return

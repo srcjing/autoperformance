@@ -1,5 +1,5 @@
 <template>
-  <div v-if="open" class="ap-dialog-mask" @click.self="onClose">
+  <div v-if="open" class="ap-dialog-mask">
     <div class="ap-dialog ap-dialog-wide" role="dialog" aria-modal="true">
       <div class="ap-dialog-header">
         <span>新建测试任务</span>
