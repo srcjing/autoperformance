@@ -466,6 +466,19 @@ func (s *e2eStore) SetTaskStarted(_ context.Context, _ repository.Tx, id int64, 
 	return nil
 }
 
+// UpdateTaskSnapshots 刷新任务快照（e2e 假存储只记录到内存任务对象）。
+func (s *e2eStore) UpdateTaskSnapshots(_ context.Context, _ repository.Tx, id int64, interfaces []domain.InterfaceSnapshot, thresholds []domain.ThresholdSnapshot) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	task, ok := s.tasks[id]
+	if !ok {
+		return errcode.ErrNotFound
+	}
+	task.InterfaceSnapshots = append([]domain.InterfaceSnapshot{}, interfaces...)
+	task.ThresholdSnapshots = append([]domain.ThresholdSnapshot{}, thresholds...)
+	return nil
+}
+
 func (s *e2eStore) SetTaskFinished(_ context.Context, _ repository.Tx, id int64, at time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

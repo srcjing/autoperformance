@@ -272,6 +272,17 @@ func (f *fakeTaskRepo) SetTaskFinished(_ context.Context, _ repository.Tx, id in
 	return nil
 }
 
+func (f *fakeTaskRepo) UpdateTaskSnapshots(_ context.Context, _ repository.Tx, id int64, interfaces []domain.InterfaceSnapshot, thresholds []domain.ThresholdSnapshot) error {
+	f.ensure()
+	t, ok := f.tasks[id]
+	if !ok {
+		return errcode.ErrNotFound
+	}
+	t.InterfaceSnapshots = append([]domain.InterfaceSnapshot{}, interfaces...)
+	t.ThresholdSnapshots = append([]domain.ThresholdSnapshot{}, thresholds...)
+	return nil
+}
+
 func (f *fakeTaskRepo) ResetTaskExecution(_ context.Context, _ repository.Tx, id int64) error {
 	f.ensure()
 	t, ok := f.tasks[id]

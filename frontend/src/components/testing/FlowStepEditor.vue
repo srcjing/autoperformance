@@ -9,7 +9,7 @@
 
     <p class="ap-muted step-hint">
       作用域决定步骤与变量的执行频率：<b>前置</b>（整个测试周期一次，如登录取 token）、<b>主流程</b>（每次迭代执行，构成压测流量）、<b>每请求前置</b>（每个主流程步骤前执行，如刷新签名）。
-      路径 / 请求头 / 请求体的值可用 <code v-pre>{{变量名}}</code> 引用上一步提取的变量。
+      点一下右侧变量名即可插入到当前输入框光标处。
     </p>
 
     <p v-if="steps.length === 0" class="ap-alert ap-alert-hint">
@@ -66,6 +66,28 @@
         </div>
       </div>
 
+      <div class="var-bar">
+        <span class="ap-field-label">可用变量（点击插入）</span>
+        <div v-if="availableVars(index).length > 0" class="var-chips">
+          <button
+            v-for="name in availableVars(index)"
+            :key="name"
+            type="button"
+            class="var-chip"
+            :disabled="disabled"
+            :title="`插入 {{${name}}}`"
+            @click="insertVar(index, name)"
+          >
+            {{ name }}
+          </button>
+        </div>
+        <span v-else class="ap-muted">暂无（前序步骤提取后可用）</span>
+        <template v-if="usedVars(step).length > 0">
+          <span class="ap-field-label used-label">本步引用</span>
+          <span v-for="name in usedVars(step)" :key="name" class="var-ref">{{ name }}</span>
+        </template>
+      </div>
+
       <div class="step-grid">
         <label class="ap-field">
           <span class="ap-field-label">路径覆盖（可选，留空用接口默认路径）</span>
@@ -73,36 +95,50 @@
             :value="step.path ?? ''"
             :disabled="disabled"
             placeholder="/api/order?token={{token}}"
+            @focus="onFocus(index, 'path', $event)"
             @input="onPath(index, $event)"
           />
-        </label>
-        <label class="ap-field">
-          <span class="ap-field-label">当前可用变量</span>
-          <span class="var-list">{{ availableVars(index) || '暂无（上一步提取后可用）' }}</span>
+          <span v-if="step.path" class="var-preview">
+            <template v-for="(seg, segIndex) in segments(step.path)" :key="segIndex">
+              <span v-if="seg.variable" class="var-ref">{{ seg.name }}</span>
+              <template v-else>{{ seg.text }}</template>
+            </template>
+          </span>
         </label>
       </div>
 
-      <details class="step-extra">
-        <summary>请求体 / 请求头覆盖（可选）</summary>
+      <details class="step-extra" open>
+        <summary>请求体 / 请求头覆盖（可选，支持变量）</summary>
         <label class="ap-field">
-          <span class="ap-field-label">请求体（支持占位符）</span>
+          <span class="ap-field-label">请求体</span>
           <textarea
             :value="step.body ?? ''"
             rows="3"
             :disabled="disabled"
             placeholder='{"token":"{{token}}"}'
+            @focus="onFocus(index, 'body', $event)"
             @input="onBody(index, $event)"
           />
+          <span v-if="step.body" class="var-preview">
+            <template v-for="(seg, segIndex) in segments(step.body)" :key="segIndex">
+              <span v-if="seg.variable" class="var-ref">{{ seg.name }}</span>
+              <template v-else>{{ seg.text }}</template>
+            </template>
+          </span>
         </label>
         <label class="ap-field">
-          <span class="ap-field-label">请求头（每行「名称: 值」，值支持占位符）</span>
+          <span class="ap-field-label">请求头（每行「名称: 值」，值支持变量）</span>
           <textarea
             :value="headersText(step)"
             rows="2"
             :disabled="disabled"
             placeholder="Authorization: Bearer {{token}}"
+            @focus="onFocus(index, 'headers', $event)"
             @input="onHeaders(index, $event)"
           />
+          <span v-if="usedVars(step).length > 0" class="var-preview">
+            引用变量：<span v-for="name in usedVars(step)" :key="name" class="var-ref">{{ name }}</span>
+          </span>
         </label>
       </details>
 
@@ -167,10 +203,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { ExtractRule, FlowStep, FlowStepScope, InterfaceOption } from '@/types'
 
-// 流程步骤编辑器：步骤顺序 + 作用域 + 请求覆盖 + 响应变量提取（PRD §3.3.7）。
+// 流程步骤编辑器：步骤顺序 + 作用域 + 请求覆盖 + 响应变量提取（PRD §3.3.6.1）。
 const props = defineProps<{
   modelValue: FlowStep[]
   interfaces: InterfaceOption[]
@@ -185,7 +221,18 @@ const SCOPE_OPTIONS: { value: FlowStepScope; label: string }[] = [
   { value: 'every_request', label: '每请求前置：每个主流程步骤前' },
 ]
 
+type FieldKey = 'path' | 'body' | 'headers'
+
+interface FocusTarget {
+  stepIndex: number
+  field: FieldKey
+  el: HTMLInputElement | HTMLTextAreaElement
+}
+
 const steps = computed(() => props.modelValue ?? [])
+const focusTarget = ref<FocusTarget | null>(null)
+
+const VAR_RE = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g
 
 function emitSteps(next: FlowStep[]): void {
   emit(
@@ -263,7 +310,6 @@ function onHeaders(index: number, event: Event): void {
 }
 
 function addRule(index: number): void {
-  const step = steps.value[index]
   emitSteps(
     steps.value.map((item, i) =>
       i === index
@@ -271,7 +317,6 @@ function addRule(index: number): void {
         : item,
     ),
   )
-  void step
 }
 
 function removeRule(index: number, ruleIndex: number): void {
@@ -288,20 +333,20 @@ function onRule(index: number, ruleIndex: number, field: keyof ExtractRule, even
   emitSteps(
     steps.value.map((item, i) => {
       if (i !== index) return item
-			const rules: ExtractRule[] = (item.extract ?? []).map((rule, r) => {
-				if (r !== ruleIndex) return rule
-				if (field === 'group') return { ...rule, group: Number(raw) || 0 }
-				if (field === 'source') return { ...rule, source: raw === 'regex' ? 'regex' : 'jsonpath' }
-				if (field === 'name') return { ...rule, name: raw }
-				return { ...rule, expr: raw }
-			})
+      const rules: ExtractRule[] = (item.extract ?? []).map((rule, r) => {
+        if (r !== ruleIndex) return rule
+        if (field === 'group') return { ...rule, group: Number(raw) || 0 }
+        if (field === 'source') return { ...rule, source: raw === 'regex' ? 'regex' : 'jsonpath' }
+        if (field === 'name') return { ...rule, name: raw }
+        return { ...rule, expr: raw }
+      })
       return { ...item, extract: rules }
     }),
   )
 }
 
 /** 当前步骤可引用的变量：前置步骤全部 + 排在前面的步骤。 */
-function availableVars(index: number): string {
+function availableVars(index: number): string[] {
   const names = new Set<string>()
   steps.value.forEach((step, i) => {
     if (i === index) return
@@ -311,7 +356,80 @@ function availableVars(index: number): string {
       if (rule.name.trim()) names.add(rule.name.trim())
     }
   })
-  return [...names].join('、')
+  return [...names]
+}
+
+/** 本步骤实际引用的变量（路径/请求头/请求体中出现过的占位符）。 */
+function usedVars(step: FlowStep): string[] {
+  const names = new Set<string>()
+  const texts = [step.path ?? '', step.body ?? '', headersText(step)]
+  for (const text of texts) {
+    for (const match of text.matchAll(VAR_RE)) {
+      names.add(match[1])
+    }
+  }
+  return [...names]
+}
+
+/** 文本 → 分段（普通文本 / 变量占位符），用于高亮展示。 */
+function segments(text: string): { text: string; variable: boolean; name: string }[] {
+  const out: { text: string; variable: boolean; name: string }[] = []
+  let last = 0
+  for (const match of text.matchAll(VAR_RE)) {
+    const start = match.index ?? 0
+    if (start > last) out.push({ text: text.slice(last, start), variable: false, name: '' })
+    out.push({ text: match[0], variable: true, name: match[1] })
+    last = start + match[0].length
+  }
+  if (last < text.length) out.push({ text: text.slice(last), variable: false, name: '' })
+  return out
+}
+
+function onFocus(index: number, field: FieldKey, event: Event): void {
+  focusTarget.value = {
+    stepIndex: index,
+    field,
+    el: event.target as HTMLInputElement | HTMLTextAreaElement,
+  }
+}
+
+/** 点击变量名 → 插入到最近聚焦的输入框光标处（无焦点时追加到路径）。 */
+function insertVar(stepIndex: number, name: string): void {
+  const token = `{{${name}}}`
+  const target = focusTarget.value
+  const step = steps.value[stepIndex]
+  if (!step) return
+
+  if (target && target.stepIndex === stepIndex && target.el) {
+    const el = target.el
+    const start = el.selectionStart ?? el.value.length
+    const end = el.selectionEnd ?? start
+    const next = el.value.slice(0, start) + token + el.value.slice(end)
+    if (target.field === 'path') patchStep(stepIndex, { path: next })
+    else if (target.field === 'body') patchStep(stepIndex, { body: next })
+    else patchStep(stepIndex, { headers: parseHeaderText(next) })
+    requestAnimationFrame(() => {
+      el.focus()
+      const pos = start + token.length
+      el.setSelectionRange(pos, pos)
+    })
+    return
+  }
+
+  patchStep(stepIndex, { path: `${step.path ?? ''}${token}` })
+}
+
+/** 请求头文本 → 映射。 */
+function parseHeaderText(text: string): Record<string, string> {
+  const headers: Record<string, string> = {}
+  for (const line of text.split('\n')) {
+    const item = line.trim()
+    if (!item) continue
+    const pos = item.indexOf(':')
+    if (pos <= 0) continue
+    headers[item.slice(0, pos).trim()] = item.slice(pos + 1).trim()
+  }
+  return headers
 }
 </script>
 
@@ -350,6 +468,55 @@ function availableVars(index: number): string {
   gap: 6px;
   align-self: end;
 }
+.var-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border: 1px dashed var(--ap-border, #dbe3ee);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: #fff;
+}
+.var-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.var-chip {
+  border: 1px solid #7aa7ff;
+  background: #eef3ff;
+  color: #1d4ed8;
+  border-radius: 12px;
+  padding: 1px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.var-chip:hover {
+  background: #dbe6ff;
+}
+.var-ref {
+  display: inline-block;
+  background: #e8f0ff;
+  color: #1d4ed8;
+  border: 1px solid #b9ccff;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  margin-left: 4px;
+}
+.used-label {
+  margin-left: 8px;
+}
+.var-preview {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ap-text-muted, #64748b);
+  word-break: break-all;
+  white-space: pre-wrap;
+}
 .step-extra summary {
   cursor: pointer;
   font-size: 12px;
@@ -359,11 +526,6 @@ function availableVars(index: number): string {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-.var-list {
-  font-size: 12px;
-  color: var(--ap-text-muted, #64748b);
-  word-break: break-all;
 }
 .extract-block {
   border-top: 1px dashed var(--ap-border, #e2e8f0);

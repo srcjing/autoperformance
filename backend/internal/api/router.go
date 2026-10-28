@@ -336,6 +336,7 @@ func taskRoutes() []taskRoute {
 		{"GET", "/tasks", "testing.task", "read", (*taskapi.Handler).ListTasks},
 		{"GET", "/tasks/:id", "testing.task", "read", (*taskapi.Handler).GetTask},
 		{"POST", "/tasks/:id/start", "testing.task", "write", (*taskapi.Handler).StartTask},
+		{"POST", "/tasks/:id/refresh-snapshot", "testing.task", "write", (*taskapi.Handler).RefreshSnapshotTask},
 		{"POST", "/tasks/:id/cancel", "testing.task", "write", (*taskapi.Handler).CancelTask},
 		{"POST", "/tasks/:id/retry", "testing.task", "write", (*taskapi.Handler).RetryTask},
 		{"POST", "/tasks/:id/cleanup", "testing.task", "write", (*taskapi.Handler).CleanupTask},

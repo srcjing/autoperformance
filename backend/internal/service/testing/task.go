@@ -52,6 +52,8 @@ type Repo interface {
 	SetTaskStarted(ctx context.Context, tx repository.Tx, id int64, at time.Time) error
 	SetTaskFinished(ctx context.Context, tx repository.Tx, id int64, at time.Time) error
 	ResetTaskExecution(ctx context.Context, tx repository.Tx, id int64) error
+	// UpdateTaskSnapshots 刷新待执行任务的接口/阈值快照（接口配置变更后同步）。
+	UpdateTaskSnapshots(ctx context.Context, tx repository.Tx, id int64, interfaces []domain.InterfaceSnapshot, thresholds []domain.ThresholdSnapshot) error
 }
 
 // Executor 编排器能力（由 orchestrator.Orchestrator 实现；nil 时执行类动作返回 10602）。
@@ -417,6 +419,10 @@ func (s *Service) Start(ctx context.Context, id int64) (*TaskView, error) {
 		case domain.EnvStatusDisabled:
 			return errcode.ErrParamFmt
 		}
+		// 执行前按接口最新配置刷新快照（接口配置变更在待执行阶段自动同步）。
+		if err := s.refreshTaskSnapshot(ctx, tx, task); err != nil {
+			return err
+		}
 		if err := s.repo.MarkEnvironmentTesting(ctx, tx, task.EnvID); err != nil {
 			return err
 		}
@@ -434,6 +440,53 @@ func (s *Service) Start(ctx context.Context, id int64) (*TaskView, error) {
 		return nil, err
 	}
 	return s.Get(ctx, id)
+}
+
+// RefreshSnapshot 手动同步任务快照（仅待执行任务）：接口配置修改后可按需刷新。
+func (s *Service) RefreshSnapshot(ctx context.Context, id int64) (*TaskView, error) {
+	if s == nil || s.repo == nil {
+		return nil, errcode.ErrDependency
+	}
+	task, err := s.repo.GetTask(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if task.Status != domain.TaskPending {
+		return nil, ErrInvalidTaskState
+	}
+	err = s.repo.WithTx(ctx, func(ctx context.Context, tx repository.Tx) error {
+		return s.refreshTaskSnapshot(ctx, tx, task)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.Get(ctx, id)
+}
+
+// refreshTaskSnapshot 按任务接口范围重新快照接口与阈值（执行/手动同步共用）。
+func (s *Service) refreshTaskSnapshot(ctx context.Context, tx repository.Tx, task *domain.TestTask) error {
+	snapshots, err := s.repo.SnapshotInterfaces(ctx, tx, task.InterfaceIDs)
+	if err != nil {
+		return err
+	}
+	if len(snapshots) == 0 {
+		return ErrInterfaceRangeEmpty
+	}
+	if len(snapshots) != len(task.InterfaceIDs) {
+		// 接口范围中的接口已被删除：拒绝以不完整的范围执行。
+		return errcode.ErrParamFmt
+	}
+	fillSnapshotURLs(snapshots, task.TargetHost)
+	thresholds, err := s.repo.SnapshotThresholds(ctx, tx, task.InterfaceIDs)
+	if err != nil {
+		return err
+	}
+	if err := s.repo.UpdateTaskSnapshots(ctx, tx, task.ID, snapshots, thresholds); err != nil {
+		return err
+	}
+	task.InterfaceSnapshots = snapshots
+	task.ThresholdSnapshots = thresholds
+	return nil
 }
 
 // rollbackStart 编排器启动失败时回退：running → failed → cleanup_pending，并释放环境。

@@ -164,7 +164,21 @@
       </div>
 
       <div class="ap-card">
-        <h3 class="cfg-title">接口范围快照（创建时固化，INV-5）</h3>
+        <div class="snapshot-head">
+          <h3 class="cfg-title">接口范围快照（待执行任务可同步最新接口配置）</h3>
+          <button
+            v-if="task.status === 'pending'"
+            type="button"
+            class="ap-btn ap-btn-ghost ap-btn-sm"
+            :disabled="syncingSnapshot"
+            @click="onRefreshSnapshot"
+          >
+            {{ syncingSnapshot ? '同步中…' : '同步接口配置' }}
+          </button>
+        </div>
+        <p v-if="task.status === 'pending'" class="ap-muted snapshot-hint">
+          执行时会自动按接口最新配置刷新快照；接口配置刚改完也可点「同步接口配置」立即刷新。
+        </p>
         <table v-if="task.interface_range_snapshot.length > 0" class="ap-table">
           <thead>
             <tr>
@@ -250,6 +264,7 @@ import RealtimeLog from '@/components/testing/RealtimeLog.vue'
 import TaskSteps from '@/components/testing/TaskSteps.vue'
 import { useEnvironmentOptions } from '@/composables/useEnvironmentOptions'
 import { useAuthStore } from '@/stores/auth'
+import { refreshTaskSnapshot } from '@/api/testing'
 import { useTaskStore, type TaskAction } from '@/stores/task'
 import { formatDateTime } from '@/utils/format'
 import { metricLabel } from '@/utils/threshold'
@@ -275,6 +290,7 @@ const { names: envNames, load: loadEnvOptions } = useEnvironmentOptions()
 
 const errorMessage = ref('')
 const acting = ref(false)
+const syncingSnapshot = ref(false)
 
 const taskId = computed(() => String(route.params.taskId ?? ''))
 const task = computed(() => store.currentTask)
@@ -397,6 +413,22 @@ async function runAction(action: TaskAction, confirmText: string): Promise<void>
   }
 }
 
+// 同步接口配置：待执行任务按接口最新配置刷新快照（执行时也会自动刷新）。
+async function onRefreshSnapshot(): Promise<void> {
+  const current = task.value
+  if (!current || syncingSnapshot.value) return
+  syncingSnapshot.value = true
+  errorMessage.value = ''
+  try {
+    const updated = await refreshTaskSnapshot(current.id)
+    store.currentTask = updated
+  } catch (err) {
+    errorMessage.value = describeTaskError(err, '同步接口配置失败')
+  } finally {
+    syncingSnapshot.value = false
+  }
+}
+
 function onStart(): void {
   void runAction('start', `确认开始任务「${task.value?.name ?? ''}」？将占用环境并拉起压测。`)
 }
@@ -515,6 +547,20 @@ onUnmounted(() => {
   }
 }
 
+.snapshot-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.snapshot-head .cfg-title {
+  margin: 0;
+}
+.snapshot-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
 .cfg-title {
   margin: 0 0 10px;
   font-size: 14px;

@@ -76,8 +76,8 @@ func concretePath(p string) string {
 func TestSecurityAllBusinessRoutesRequireAuthN(t *testing.T) {
 	r, _ := newTestRouter(t, map[string]bool{})
 	routes := securedRoutesForTest()
-	if len(routes) != 77 {
-		t.Fatalf("受保护业务路由数 = %d, want 77（81 REST - 4 认证）", len(routes))
+	if len(routes) != 78 {
+		t.Fatalf("受保护业务路由数 = %d, want 78（82 REST - 4 认证）", len(routes))
 	}
 
 	for _, rt := range routes {

@@ -91,3 +91,8 @@ export function retryTask(id: string): Promise<TestTaskInfo> {
 export function cleanupTask(id: string): Promise<TestTaskInfo> {
   return request<TestTaskInfo>(`/tasks/${id}/cleanup`, { method: 'POST' })
 }
+
+/** 同步待执行任务的接口/阈值快照（接口配置变更后立即刷新）。 */
+export function refreshTaskSnapshot(id: string): Promise<TestTaskInfo> {
+  return request<TestTaskInfo>(`/tasks/${id}/refresh-snapshot`, { method: 'POST' })
+}

@@ -144,6 +144,21 @@ func (h *Handler) StartTask(c *gin.Context) {
 	response.OK(c, toTaskDTO(view))
 }
 
+// RefreshSnapshotTask POST /api/v1/tasks/{id}/refresh-snapshot（testing.task:write；仅 pending）
+func (h *Handler) RefreshSnapshotTask(c *gin.Context) {
+	id, err := parseID(c)
+	if err != nil {
+		response.Error(c, errcode.ErrParamFmt)
+		return
+	}
+	view, err := h.svc.RefreshSnapshot(c.Request.Context(), id)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.OK(c, toTaskDTO(view))
+}
+
 // CancelTask POST /api/v1/tasks/{id}/cancel（testing.task:write；running → cancelled → cleanup_pending）
 func (h *Handler) CancelTask(c *gin.Context) {
 	id, err := parseID(c)

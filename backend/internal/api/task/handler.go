@@ -40,6 +40,7 @@ type Service interface {
 	Cancel(ctx context.Context, id int64) (*testsvc.TaskView, error)
 	Retry(ctx context.Context, id int64) (*testsvc.TaskView, error)
 	Cleanup(ctx context.Context, id int64) (*testsvc.TaskView, error)
+	RefreshSnapshot(ctx context.Context, id int64) (*testsvc.TaskView, error)
 }
 
 // Handler 测试管理 HTTP handler。

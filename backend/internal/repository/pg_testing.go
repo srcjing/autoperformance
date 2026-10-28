@@ -636,6 +636,29 @@ func (r *PGRepository) SetTaskResult(ctx context.Context, tx Tx, id int64, resul
 	return nil
 }
 
+// UpdateTaskSnapshots 刷新任务的接口/阈值快照（仅待执行任务使用）。
+func (r *PGRepository) UpdateTaskSnapshots(ctx context.Context, tx Tx, id int64, interfaces []domain.InterfaceSnapshot, thresholds []domain.ThresholdSnapshot) error {
+	ifaceSnapshots, err := marshalSnapshot(interfaces)
+	if err != nil {
+		return err
+	}
+	thresholdSnapshots, err := marshalSnapshot(thresholds)
+	if err != nil {
+		return err
+	}
+	const q = `UPDATE test_task SET interface_range_snapshot = $2::jsonb,
+	           threshold_snapshot = $3::jsonb, version = version + 1, updated_at = now()
+	         WHERE id = $1 AND deleted_at IS NULL`
+	tag, err := r.conn(tx).Exec(ctx, q, id, ifaceSnapshots, thresholdSnapshots)
+	if err != nil {
+		return fmt.Errorf("刷新任务快照失败: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errcode.ErrNotFound
+	}
+	return nil
+}
+
 // ResetTaskExecution 清理执行痕迹（重试前调用）。
 func (r *PGRepository) ResetTaskExecution(ctx context.Context, tx Tx, id int64) error {
 	const q = `UPDATE test_task SET started_at = NULL, finished_at = NULL, result = NULL,

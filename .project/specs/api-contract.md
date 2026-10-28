@@ -359,6 +359,12 @@
 - 请求参数：无（path `id`）。
 - 语义：`pending → running`；编排器领取任务、生成 k6 脚本、拉起子进程，WebSocket 推送实时进度/日志。非 `pending` 状态返回 `23001`；环境占用返回 `23002`。
 
+**POST /api/v1/tasks/{id}/refresh-snapshot** — 同步接口/阈值快照
+
+- 请求参数：无（path `id`）。
+- 语义：仅 `pending` 任务；按接口最新配置重新快照 `interface_range_snapshot` + `threshold_snapshot`，返回刷新后的任务。非 `pending` 返回 `23001`；接口已被删除导致范围不完整返回 `10003`。
+- 自动同步：`POST /tasks/{id}/start` 在执行前也会先刷新快照，保证压测使用接口最新配置；已开始/已完成任务保留当次快照以保证报告可复现。
+
 **POST /api/v1/tasks/{id}/cancel** — 停止/取消
 
 - 请求参数：无。语义：`running → cancelled`（终止 k6 子进程），记录审计。
