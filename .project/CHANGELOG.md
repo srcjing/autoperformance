@@ -27,3 +27,4 @@
 | 2026-10-28 | 修正 | 测试管理 | 请求详情记录实际发送的请求体：k6 AFREQ 回传渲染后 body（≤4KB），流程步骤级 body 覆盖优先；修复 GET 带 body 被丢弃（改 http.request）；JSON 体未声明 Content-Type 时自动补 application/json | `specs/api-contract.md` | dev |
 | 2026-10-28 | 新增 | 日志查询 | 请求详情补记请求头与响应头（migration 000007）：k6 侧对 Cookie/Authorization/Token/*Key*/Set-Cookie 等敏感头脱敏为 ***，均截断 4KB；前端请求详情展开新增「请求头」「响应头」；「采集响应体」开关语义拓展为「采集请求明细」 | `specs/api-contract.md` §2.6 | dev |
 | 2026-10-28 | 修正 | 测试管理 | 前置步骤 Cookie 自动传播：k6 setup 阶段收集响应 Set-Cookie 并注入各 VU cookie jar（解决「登录成功但业务接口报会话过期」——网关会话 = ADMINSESSIONID Cookie + csrfToken 头，k6 cookie jar 不跨 VU 共享） | `prds/PRD-performance-testing-platform.md` §3.3.6.1 | dev |
+| 2026-10-28 | 修正 | 全平台表单 | 请求头/请求体统一为 Postman 式行编辑：HeaderRowsEditor（启用/键/值 + 变量高亮与点击插入）、BodyRowsEditor（路径键值行表达嵌套 attrs.ouId / list[0].id + JSON 预览 + 粘贴 JSON 拆解）、RequestImportDialog（原始 HTTP 报文/JSON 一键识别回填方法/地址/头/体） | `specs/api-contract.md` | dev |

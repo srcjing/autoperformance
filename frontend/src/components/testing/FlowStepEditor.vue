@@ -67,25 +67,11 @@
       </div>
 
       <div class="var-bar">
-        <span class="ap-field-label">可用变量（点击插入）</span>
-        <div v-if="availableVars(index).length > 0" class="var-chips">
-          <button
-            v-for="name in availableVars(index)"
-            :key="name"
-            type="button"
-            class="var-chip"
-            :disabled="disabled"
-            :title="`插入 {{${name}}}`"
-            @click="insertVar(index, name)"
-          >
-            {{ name }}
-          </button>
-        </div>
-        <span v-else class="ap-muted">暂无（前序步骤提取后可用）</span>
         <template v-if="usedVars(step).length > 0">
           <span class="ap-field-label used-label">本步引用</span>
           <span v-for="name in usedVars(step)" :key="name" class="var-ref">{{ name }}</span>
         </template>
+        <span v-else class="ap-muted">本步暂未引用变量</span>
       </div>
 
       <p v-if="missingVars(index, step).length > 0" class="var-missing">
@@ -108,42 +94,38 @@
               <template v-else>{{ seg.text }}</template>
             </template>
           </span>
+          <span v-if="availableVars(index).length > 0" class="path-vars">
+            <span class="ap-muted">插入变量：</span>
+            <button
+              v-for="name in availableVars(index)"
+              :key="name"
+              type="button"
+              class="var-chip"
+              :disabled="disabled"
+              @click="insertVar(index, name)"
+            >
+              {{ name }}
+            </button>
+          </span>
         </label>
       </div>
 
       <details class="step-extra" open>
         <summary>请求体 / 请求头覆盖（可选，支持变量）</summary>
-        <label class="ap-field">
-          <span class="ap-field-label">请求体</span>
-          <textarea
-            :value="step.body ?? ''"
-            rows="3"
-            :disabled="disabled"
-            placeholder='{"token":"{{token}}"}'
-            @focus="onFocus(index, 'body', $event)"
-            @input="onBody(index, $event)"
-          />
-          <span v-if="step.body" class="var-preview">
-            <template v-for="(seg, segIndex) in segments(step.body)" :key="segIndex">
-              <span v-if="seg.variable" class="var-ref">{{ seg.name }}</span>
-              <template v-else>{{ seg.text }}</template>
-            </template>
-          </span>
-        </label>
-        <label class="ap-field">
-          <span class="ap-field-label">请求头（每行「名称: 值」，值支持变量）</span>
-          <textarea
-            :value="headersText(step)"
-            rows="2"
-            :disabled="disabled"
-            placeholder="Authorization: Bearer {{token}}"
-            @focus="onFocus(index, 'headers', $event)"
-            @input="onHeaders(index, $event)"
-          />
-          <span v-if="usedVars(step).length > 0" class="var-preview">
-            引用变量：<span v-for="name in usedVars(step)" :key="name" class="var-ref">{{ name }}</span>
-          </span>
-        </label>
+        <BodyRowsEditor
+          :model-value="step.body ?? ''"
+          :variables="availableVars(index)"
+          :disabled="disabled"
+          label="请求体（覆盖接口默认 body）"
+          @update:model-value="onBodyText(index, $event)"
+        />
+        <HeaderRowsEditor
+          :model-value="step.headers ?? {}"
+          :variables="availableVars(index)"
+          :disabled="disabled"
+          label="请求头（覆盖/追加接口默认头）"
+          @update:model-value="onHeadersMap(index, $event)"
+        />
       </details>
 
       <div class="extract-block">
@@ -208,6 +190,8 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import BodyRowsEditor from '@/components/common/BodyRowsEditor.vue'
+import HeaderRowsEditor from '@/components/common/HeaderRowsEditor.vue'
 import type { ExtractRule, FlowStep, FlowStepScope, InterfaceOption } from '@/types'
 
 // 流程步骤编辑器：步骤顺序 + 作用域 + 请求覆盖 + 响应变量提取（PRD §3.3.6.1）。
@@ -291,25 +275,13 @@ function onPath(index: number, event: Event): void {
   patchStep(index, { path: (event.target as HTMLInputElement).value })
 }
 
-function onBody(index: number, event: Event): void {
-  patchStep(index, { body: (event.target as HTMLTextAreaElement).value })
+/** 请求体（JSON 文本）覆盖。 */
+function onBodyText(index: number, text: string): void {
+  patchStep(index, { body: text })
 }
 
-function headersText(step: FlowStep): string {
-  return Object.entries(step.headers ?? {})
-    .map(([key, value]) => `${key}: ${value}`)
-    .join('\n')
-}
-
-function onHeaders(index: number, event: Event): void {
-  const headers: Record<string, string> = {}
-  for (const line of (event.target as HTMLTextAreaElement).value.split('\n')) {
-    const text = line.trim()
-    if (!text) continue
-    const pos = text.indexOf(':')
-    if (pos <= 0) continue
-    headers[text.slice(0, pos).trim()] = text.slice(pos + 1).trim()
-  }
+/** 请求头覆盖（整表替换）。 */
+function onHeadersMap(index: number, headers: Record<string, string>): void {
   patchStep(index, { headers })
 }
 
@@ -366,7 +338,8 @@ function availableVars(index: number): string[] {
 /** 本步骤实际引用的变量（路径/请求头/请求体中出现过的占位符）。 */
 function usedVars(step: FlowStep): string[] {
   const names = new Set<string>()
-  const texts = [step.path ?? '', step.body ?? '', headersText(step)]
+  const headerText = Object.values(step.headers ?? {}).join('\n')
+  const texts = [step.path ?? '', step.body ?? '', headerText]
   for (const text of texts) {
     for (const match of text.matchAll(VAR_RE)) {
       names.add(match[1])
@@ -403,21 +376,19 @@ function onFocus(index: number, field: FieldKey, event: Event): void {
   }
 }
 
-/** 点击变量名 → 插入到最近聚焦的输入框光标处（无焦点时追加到路径）。 */
+/** 点击变量名 → 插入到路径输入框光标处（无焦点时追加到末尾）。 */
 function insertVar(stepIndex: number, name: string): void {
   const token = `{{${name}}}`
-  const target = focusTarget.value
   const step = steps.value[stepIndex]
   if (!step) return
 
-  if (target && target.stepIndex === stepIndex && target.el) {
+  const target = focusTarget.value
+  if (target && target.stepIndex === stepIndex && target.field === 'path' && target.el) {
     const el = target.el
     const start = el.selectionStart ?? el.value.length
     const end = el.selectionEnd ?? start
     const next = el.value.slice(0, start) + token + el.value.slice(end)
-    if (target.field === 'path') patchStep(stepIndex, { path: next })
-    else if (target.field === 'body') patchStep(stepIndex, { body: next })
-    else patchStep(stepIndex, { headers: parseHeaderText(next) })
+    patchStep(stepIndex, { path: next })
     requestAnimationFrame(() => {
       el.focus()
       const pos = start + token.length
@@ -425,22 +396,9 @@ function insertVar(stepIndex: number, name: string): void {
     })
     return
   }
-
   patchStep(stepIndex, { path: `${step.path ?? ''}${token}` })
 }
 
-/** 请求头文本 → 映射。 */
-function parseHeaderText(text: string): Record<string, string> {
-  const headers: Record<string, string> = {}
-  for (const line of text.split('\n')) {
-    const item = line.trim()
-    if (!item) continue
-    const pos = item.indexOf(':')
-    if (pos <= 0) continue
-    headers[item.slice(0, pos).trim()] = item.slice(pos + 1).trim()
-  }
-  return headers
-}
 </script>
 
 <style scoped>
@@ -492,6 +450,14 @@ function parseHeaderText(text: string): Record<string, string> {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+.path-vars {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
 }
 .var-chip {
   border: 1px solid #7aa7ff;

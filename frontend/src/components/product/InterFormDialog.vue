@@ -7,6 +7,13 @@
       </div>
 
       <form class="ap-dialog-body" @submit.prevent="onSubmit">
+        <div class="import-bar">
+          <span class="ap-muted">可从原始 HTTP 报文或 JSON 一键识别并填充</span>
+          <button type="button" class="ap-btn ap-btn-ghost ap-btn-sm" :disabled="saving" @click="importOpen = true">
+            导入请求
+          </button>
+        </div>
+
         <div class="ap-form-row">
           <label class="ap-field">
             <span class="ap-field-label">接口名称 *</span>
@@ -55,87 +62,23 @@
         </p>
 
         <div class="ap-field">
-          <div class="headers-head">
-            <span class="ap-field-label">请求头（Postman 方式：勾选启用 / 键 / 值）</span>
-            <button
-              type="button"
-              class="ap-btn ap-btn-ghost ap-btn-sm"
-              :disabled="saving"
-              @click="addHeaderRow"
-            >
-              + 添加请求头
-            </button>
-          </div>
-          <table v-if="headerRows.length > 0" class="ap-table header-table">
-            <thead>
-              <tr>
-                <th class="col-enable">启用</th>
-                <th class="col-name">键（Header 名）</th>
-                <th>值</th>
-                <th class="col-op">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(row, index) in headerRows" :key="index" :class="{ 'row-disabled': !row.enabled }">
-                <td class="col-enable">
-                  <input v-model="row.enabled" type="checkbox" :disabled="saving" />
-                </td>
-                <td class="col-name">
-                  <input
-                    v-model="row.name"
-                    :disabled="saving"
-                    placeholder="Content-Type"
-                    list="ap-common-headers"
-                  />
-                </td>
-                <td>
-                  <input
-                    v-model="row.value"
-                    :disabled="saving"
-                    :placeholder="row.valuePlaceholder"
-                  />
-                </td>
-                <td class="col-op">
-                  <button
-                    type="button"
-                    class="ap-btn ap-btn-danger ap-btn-sm"
-                    :disabled="saving"
-                    @click="removeHeaderRow(index)"
-                  >
-                    删除
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <p v-else class="ap-muted">暂无请求头，点击「添加请求头」新增。</p>
-          <datalist id="ap-common-headers">
-            <option value="Content-Type" />
-            <option value="Accept" />
-            <option value="Authorization" />
-            <option value="Cookie" />
-            <option value="csrfToken" />
-            <option value="X-Api-Key" />
-            <option value="User-Agent" />
-          </datalist>
+          <HeaderRowsEditor v-model="headers" :disabled="saving" label="请求头（Postman 方式：勾选启用 / 键 / 值）" />
         </div>
         <p class="ap-alert ap-alert-hint">
           认证头（Authorization / Token / Cookie / X-Api-Key 等）由服务端 AES-256-GCM 加密保存，页面与接口响应均不展示明文。
           编辑时认证头名保持留空即沿用已保存的值；删除该行即删除该认证头。
         </p>
 
-        <label class="ap-field">
-          <span class="ap-field-label">参数模板 body（JSON，可留空）</span>
-          <textarea
+        <div class="ap-field">
+          <BodyRowsEditor
             v-model="bodyText"
             :disabled="saving"
-            rows="4"
-            placeholder='{"sku": "A-1", "qty": 1}'
+            label="请求体（键值行，路径支持嵌套如 attrs.ouId / list[0].id）"
           />
           <span class="ap-muted">
-            流程测试中 body / 路径可用占位符（如 <code v-pre>{"token":"{{token}}"}</code>）引用上一步提取的变量。
+            流程测试中请求体 / 路径可用占位符（如 <code v-pre>{{token}}</code>）引用上一步提取的变量。
           </span>
-        </label>
+        </div>
 
         <div class="ap-form-row">
           <label class="ap-field">
@@ -169,12 +112,17 @@
           </button>
         </div>
       </form>
+
+      <RequestImportDialog :open="importOpen" @close="importOpen = false" @fill="onImportFill" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import BodyRowsEditor from '@/components/common/BodyRowsEditor.vue'
+import HeaderRowsEditor from '@/components/common/HeaderRowsEditor.vue'
+import RequestImportDialog from '@/components/common/RequestImportDialog.vue'
 import type { HttpMethod, InterfaceInfo, InterfacePayload, InterfaceScheme } from '@/types'
 
 // 接口新建/编辑弹窗（全量字段 + version 乐观锁）。
@@ -199,25 +147,39 @@ const method = ref<HttpMethod>('GET')
 const scheme = ref<InterfaceScheme>('http')
 const port = ref(80)
 const path = ref('')
-// 请求头行（Postman 风格：启用 / 键 / 值）；认证头值留空 = 沿用已保存密文。
-interface HeaderRow {
-  name: string
-  value: string
-  enabled: boolean
-  /** 认证头占位提示（值为空时展示）。 */
-  valuePlaceholder: string
-}
-
-const headerRows = ref<HeaderRow[]>([])
-
-function addHeaderRow(): void {
-  headerRows.value.push({ name: '', value: '', enabled: true, valuePlaceholder: '值' })
-}
-
-function removeHeaderRow(index: number): void {
-  headerRows.value.splice(index, 1)
-}
+// 请求头（键 → 值）；认证头值留空 = 沿用已保存密文。
+const headers = ref<Record<string, string>>({})
 const bodyText = ref('')
+const importOpen = ref(false)
+
+/** 导入请求 → 回填方法 / 地址 / 请求头 / 请求体。 */
+function onImportFill(payload: {
+  method?: string
+  url?: string
+  headers?: Record<string, string>
+  body?: string
+}): void {
+  importOpen.value = false
+  if (payload.method) {
+    method.value = payload.method as HttpMethod
+  }
+  if (payload.url) {
+    try {
+      const parsed = new URL(payload.url)
+      scheme.value = parsed.protocol === 'http:' ? 'http' : 'https'
+      port.value = Number(parsed.port) || (parsed.protocol === 'http:' ? 80 : 443)
+      path.value = `${parsed.pathname}${parsed.search}`
+    } catch {
+      formError.value = '导入的地址无法解析，请手动填写路径'
+    }
+  }
+  if (payload.headers) {
+    headers.value = { ...payload.headers }
+  }
+  if (payload.body) {
+    bodyText.value = payload.body
+  }
+}
 const connectMS = ref(0)
 const readMS = ref(0)
 const totalMS = ref(0)
@@ -243,19 +205,11 @@ function reset(): void {
   port.value = item?.port ?? (item?.scheme === 'https' ? 443 : 80)
   path.value = item?.path ?? ''
   // 普通头直接回填；认证头仅回填名称（值留空 = 沿用已保存密文）。
-  const rows: HeaderRow[] = []
-  for (const [key, value] of Object.entries(item?.headers ?? {})) {
-    rows.push({ name: key, value, enabled: true, valuePlaceholder: '值' })
-  }
+  const init: Record<string, string> = { ...(item?.headers ?? {}) }
   for (const header of item?.auth_headers ?? []) {
-    rows.push({
-      name: header,
-      value: '',
-      enabled: true,
-      valuePlaceholder: '留空则沿用已保存的加密值',
-    })
+    if (init[header] === undefined) init[header] = ''
   }
-  headerRows.value = rows
+  headers.value = init
   bodyText.value = item?.body === undefined ? '' : JSON.stringify(item.body, null, 2)
   connectMS.value = item?.timeouts?.connect_ms ?? 0
   readMS.value = item?.timeouts?.read_ms ?? 0
@@ -265,23 +219,6 @@ function reset(): void {
 }
 
 /** 解析请求头文本（每行 Name: value）。 */
-/** 解析请求头行（仅收集启用且键非空的行）。 */
-function parseHeaderRows(): { headers: Record<string, string>; error: string } {
-  const headers: Record<string, string> = {}
-  for (const [index, row] of headerRows.value.entries()) {
-    if (!row.enabled) continue
-    const key = row.name.trim()
-    if (!key) {
-      return { headers: {}, error: `第 ${index + 1} 行请求头名称不能为空` }
-    }
-    if (headers[key] !== undefined) {
-      return { headers: {}, error: `请求头名称重复：${key}` }
-    }
-    headers[key] = row.value.trim()
-  }
-  return { headers, error: '' }
-}
-
 function onClose(): void {
   if (props.saving) return
   emit('close')
@@ -315,12 +252,6 @@ function onSubmit(): void {
     return
   }
 
-  const parsed = parseHeaderRows()
-  if (parsed.error) {
-    formError.value = parsed.error
-    return
-  }
-
   const timeouts = {
     connect_ms: Number(connectMS.value) || 0,
     read_ms: Number(readMS.value) || 0,
@@ -339,7 +270,7 @@ function onSubmit(): void {
     scheme: scheme.value,
     port: portValue,
     path: pathValue,
-    headers: parsed.headers,
+    headers: headers.value,
     timeouts,
     description: description.value.trim(),
   }
@@ -383,6 +314,17 @@ function onSubmit(): void {
 .path-field {
   flex: 1 1 220px;
   min-width: 200px;
+}
+.import-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px;
+  border: 1px dashed #c7d2fe;
+  border-radius: 8px;
+  background: #f8faff;
+  font-size: 12px;
 }
 .headers-head {
   display: flex;
