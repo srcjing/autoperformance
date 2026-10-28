@@ -23,3 +23,7 @@ Thumbs.db
 deploy/offline/assets/
 deploy/offline/_dl/
 
+
+# 抓包/抓站导出（可能含真实凭据，禁止入库）
+*.har
+*.pcap
