@@ -33,7 +33,10 @@ type capturedRequest struct {
 	Error       string `json:"e"`
 	// RequestBody 实际发送的请求体（渲染后，≤4KB）。
 	RequestBody string `json:"rb"`
-	Body        string `json:"b"`
+	// RequestHeaders / ResponseHeaders 已脉敏的头（JSON 文本）。
+	RequestHeaders  string `json:"rq"`
+	ResponseHeaders string `json:"rs"`
+	Body            string `json:"b"`
 }
 
 // parseCapturedRequest 解析 `AFREQ|{json}` 行。
@@ -100,8 +103,10 @@ func (o *Orchestrator) recordRequestLogs(ctx context.Context, task *domain.TestT
 				OccurredAt:     now,
 				Method:         c.Method,
 				URL:            c.URL,
-				RequestBody:    c.RequestBody,
-				ResponseStatus: c.Status,
+				RequestBody:     c.RequestBody,
+				RequestHeaders:  c.RequestHeaders,
+				ResponseHeaders: c.ResponseHeaders,
+				ResponseStatus:  c.Status,
 				ErrorMessage:   c.Error,
 				DurationMs:     c.DurationMs,
 				ResponseBody:   c.Body,

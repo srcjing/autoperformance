@@ -67,9 +67,13 @@ type RequestLog struct {
 	Method         string
 	URL            string
 	RequestBody    string
+	// RequestHeaders 实际发送的请求头（认证类已脉敏，≤4KB，JSON 文本）。
+	RequestHeaders string
 	ResponseStatus int
-	ResponseBody   string
-	ErrorCode      string
+	ResponseBody    string
+	// ResponseHeaders 响应头（Set-Cookie 等敏感头已脉敏，≤4KB，JSON 文本）。
+	ResponseHeaders string
+	ErrorCode       string
 	ErrorMessage   string
 	DurationMs     int64
 }

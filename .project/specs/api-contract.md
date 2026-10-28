@@ -445,6 +445,9 @@
 - 通用请求参数（query）：`start_time`/`end_time`（时间范围）、`keyword`、`level`(info/warn/error)、分页。
 - 用户日志追加：`admin_id`（操作人）、`action`（动作枚举）、`resource_type`/`resource_id`（关联对象）。
 - 测试日志追加：`task_id`（按任务定位）。
+- 请求详情（`GET /api/v1/logs/request`）：字段含 `method`/`url`/`request_headers`/`request_body`/`response_status`/`response_headers`/`response_body`/`error_code`/`error_message`/`duration_ms`。
+  - 请求头/响应头、请求体/响应体均在 k6 侧或写入前截断至 4KB；`Cookie`/`Authorization`/`Token`/`*Key*`/`Set-Cookie` 等敏感头统一脱敏（`***`）。
+  - 仅在任务开启「采集请求明细」（`flow.capture_response_body=true`）时记录头/体与响应内容，默认关闭以保护压测性能。
 - **安全约束**（对应 `DES-T-001`/`DES-R-001`）：日志为**只读**接口，无删除/修改端点；审计日志 HMAC 链式防篡改，应用层禁止 UPDATE/DELETE；写入前统一脱敏（剥离口令/`Authorization`/私钥特征）。
 
 ---

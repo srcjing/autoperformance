@@ -129,6 +129,26 @@ function withContentType(headers, body) {
   return out;
 }
 
+// maskHeaders 请求/响应头脱敏：认证类头只保留长度，其余截断 512 字符。
+function maskHeaders(headers) {
+  var out = {};
+  if (!headers) { return out; }
+  for (var key in headers) {
+    var lower = String(key).toLowerCase();
+    var sensitive = lower === 'cookie' || lower === 'set-cookie' || lower === 'authorization'
+      || lower === 'proxy-authorization' || lower.indexOf('token') >= 0
+      || lower.indexOf('secret') >= 0 || lower.indexOf('api-key') >= 0
+      || lower.indexOf('apikey') >= 0 || lower.indexOf('password') >= 0;
+    var raw = (headers[key] === null || headers[key] === undefined) ? '' : String(headers[key]);
+    if (sensitive) {
+      out[key] = raw ? '******(len=' + raw.length + ')' : '';
+    } else {
+      out[key] = raw.length > 512 ? raw.slice(0, 512) : raw;
+    }
+  }
+  return out;
+}
+
 const REQUESTS = [
 {{- range .Requests }}
   {
@@ -167,6 +187,8 @@ export default function () {
         d: Math.round(res.timings.duration),
         e: res.error || '',
         rb: req.body ? String(req.body).slice(0, 4096) : '',
+        rq: JSON.stringify(maskHeaders(params.headers)),
+        rs: JSON.stringify(maskHeaders(res.headers)),
         b: (res.body === null || res.body === undefined) ? '' : String(res.body).slice(0, 4096),
       }));
     } catch (err) { /* 采集异常不影响压测 */ }
@@ -304,6 +326,26 @@ function withContentType(headers, body) {
   return out;
 }
 
+// maskHeaders 请求/响应头脱敏：认证类头只保留长度，其余截断 512 字符。
+function maskHeaders(headers) {
+  var out = {};
+  if (!headers) { return out; }
+  for (var key in headers) {
+    var lower = String(key).toLowerCase();
+    var sensitive = lower === 'cookie' || lower === 'set-cookie' || lower === 'authorization'
+      || lower === 'proxy-authorization' || lower.indexOf('token') >= 0
+      || lower.indexOf('secret') >= 0 || lower.indexOf('api-key') >= 0
+      || lower.indexOf('apikey') >= 0 || lower.indexOf('password') >= 0;
+    var raw = (headers[key] === null || headers[key] === undefined) ? '' : String(headers[key]);
+    if (sensitive) {
+      out[key] = raw ? '******(len=' + raw.length + ')' : '';
+    } else {
+      out[key] = raw.length > 512 ? raw.slice(0, 512) : raw;
+    }
+  }
+  return out;
+}
+
 function send(step, vars) {
   var headers = {};
   for (var key in step.headers) { headers[key] = render(step.headers[key], vars, step.label); }
@@ -329,6 +371,8 @@ function send(step, vars) {
       d: Math.round(res.timings.duration),
       e: res.error || '',
       rb: body ? String(body).slice(0, 4096) : '',
+      rq: JSON.stringify(maskHeaders(params.headers)),
+      rs: JSON.stringify(maskHeaders(res.headers)),
       b: (res.body === null || res.body === undefined) ? '' : String(res.body).slice(0, 4096),
     }));
   } catch (err) { /* 采集异常不影响压测 */ }

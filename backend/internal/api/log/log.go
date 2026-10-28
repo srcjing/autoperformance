@@ -82,9 +82,11 @@ type requestLogDTO struct {
 	OccurredAt     string `json:"occurred_at"`
 	Method         string `json:"method"`
 	URL            string `json:"url"`
-	RequestBody    string `json:"request_body,omitempty"`
-	ResponseStatus int    `json:"response_status"`
-	ResponseBody   string `json:"response_body,omitempty"`
+	RequestBody     string `json:"request_body,omitempty"`
+	RequestHeaders  string `json:"request_headers,omitempty"`
+	ResponseStatus  int    `json:"response_status"`
+	ResponseBody    string `json:"response_body,omitempty"`
+	ResponseHeaders string `json:"response_headers,omitempty"`
 	ErrorCode      string `json:"error_code,omitempty"`
 	ErrorMessage   string `json:"error_message,omitempty"`
 	DurationMs     int64  `json:"duration_ms"`

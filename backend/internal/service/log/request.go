@@ -111,7 +111,9 @@ func prepareRequestLogs(taskID int64, entries []domain.RequestLog, now time.Time
 		e.Method = truncateText(strings.ToUpper(strings.TrimSpace(e.Method)), maxMethodLen)
 		e.URL = truncateText(logutil.SanitizeLog(e.URL), maxURLLen)
 		e.RequestBody = truncateText(logutil.SanitizeLog(e.RequestBody), domain.MaxLogBodyBytes)
+		e.RequestHeaders = truncateText(logutil.SanitizeLog(e.RequestHeaders), domain.MaxLogBodyBytes)
 		e.ResponseBody = truncateText(logutil.SanitizeLog(e.ResponseBody), domain.MaxLogBodyBytes)
+		e.ResponseHeaders = truncateText(logutil.SanitizeLog(e.ResponseHeaders), domain.MaxLogBodyBytes)
 		e.ErrorCode = truncateText(logutil.SanitizeLog(e.ErrorCode), maxErrorCodeLen)
 		e.ErrorMessage = truncateText(logutil.SanitizeLog(e.ErrorMessage), maxErrorMessageLen)
 		if e.ResponseStatus < 0 {

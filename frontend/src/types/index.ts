@@ -809,9 +809,11 @@ export interface RequestLogInfo {
   occurred_at: string
   method: string
   url: string
-  request_body?: string
-  response_status: number
-  response_body?: string
+	request_body?: string
+	request_headers?: string
+	response_status: number
+	response_body?: string
+	response_headers?: string
   error_code?: string
   error_message?: string
   duration_ms: number

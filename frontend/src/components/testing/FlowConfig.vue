@@ -262,9 +262,13 @@
           @change="onCaptureBodyChange"
         />
         <span
-          >采集响应体（<b>压测性能开销较大，默认不采集</b>；开启后请求详情记录响应内容）</span
+          >采集请求明细（<b>压测性能开销较大，默认不采集</b>；开启后请求详情记录
+          <b>请求头 / 请求体 / 响应头 / 响应体</b>，认证类头自动脉敏）</span
         >
       </label>
+      <p v-if="!captureBody" class="ap-muted capture-hint">
+        未开启时：请求详情只记录状态码/耗时与接口配置的请求体模板，看不到实际请求头与响应头。
+      </p>
     </div>
 
     <p class="ap-alert ap-alert-hint">
@@ -504,6 +508,10 @@ function toggleMetric(metric: ThresholdMetric): void {
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
+}
+.capture-hint {
+  margin: 0;
+  font-size: 12px;
 }
 
 .mode-hint {

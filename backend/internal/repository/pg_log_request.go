@@ -22,11 +22,11 @@ func (r *PGRepository) AppendRequestLogs(ctx context.Context, entries []domain.R
 		return nil
 	}
 	// 列顺序必须与下方 args 追加顺序严格一致。
-	const columns = 12
+	const columns = 14
 	var b strings.Builder
 	b.WriteString(`INSERT INTO request_log
-		(task_id, interface_id, seq, occurred_at, method, url, request_body,
-		 response_status, response_body, error_code, error_message, duration_ms) VALUES `)
+		(task_id, interface_id, seq, occurred_at, method, url, request_body, request_headers,
+		 response_status, response_body, response_headers, error_code, error_message, duration_ms) VALUES `)
 	args := make([]any, 0, len(entries)*columns)
 	for i := range entries {
 		e := &entries[i]
@@ -42,8 +42,8 @@ func (r *PGRepository) AppendRequestLogs(ctx context.Context, entries []domain.R
 		}
 		b.WriteByte(')')
 		args = append(args, e.TaskID, e.InterfaceID, e.Seq, e.OccurredAt,
-			e.Method, e.URL, e.RequestBody, e.ResponseStatus, e.ResponseBody,
-			e.ErrorCode, e.ErrorMessage, e.DurationMs)
+			e.Method, e.URL, e.RequestBody, e.RequestHeaders, e.ResponseStatus, e.ResponseBody,
+			e.ResponseHeaders, e.ErrorCode, e.ErrorMessage, e.DurationMs)
 	}
 
 	if _, err := r.pool.Exec(ctx, b.String(), args...); err != nil {
@@ -83,8 +83,8 @@ func (r *PGRepository) QueryRequestLogs(ctx context.Context, q domain.RequestLog
 	if q.TaskID > 0 {
 		order = ` ORDER BY seq ASC, id ASC`
 	}
-	const columns = `id, task_id, interface_id, seq, occurred_at, method, url, request_body,
-		response_status, response_body, error_code, error_message, duration_ms`
+	const columns = `id, task_id, interface_id, seq, occurred_at, method, url, request_body, request_headers,
+		response_status, response_body, response_headers, error_code, error_message, duration_ms`
 	query := `SELECT ` + columns + ` FROM request_log` + requestLogFilter + order +
 		` LIMIT $6 OFFSET $7`
 	rows, err := r.pool.Query(ctx, query, append(args, q.PageSize, offset)...)
@@ -97,8 +97,9 @@ func (r *PGRepository) QueryRequestLogs(ctx context.Context, q domain.RequestLog
 	for rows.Next() {
 		var entry domain.RequestLog
 		if err := rows.Scan(&entry.ID, &entry.TaskID, &entry.InterfaceID, &entry.Seq, &entry.OccurredAt,
-			&entry.Method, &entry.URL, &entry.RequestBody, &entry.ResponseStatus, &entry.ResponseBody,
-			&entry.ErrorCode, &entry.ErrorMessage, &entry.DurationMs); err != nil {
+			&entry.Method, &entry.URL, &entry.RequestBody, &entry.RequestHeaders, &entry.ResponseStatus,
+			&entry.ResponseBody, &entry.ResponseHeaders, &entry.ErrorCode, &entry.ErrorMessage,
+			&entry.DurationMs); err != nil {
 			return nil, 0, fmt.Errorf("扫描请求详情失败: %w", err)
 		}
 		out = append(out, entry)

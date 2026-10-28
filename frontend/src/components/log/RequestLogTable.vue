@@ -54,6 +54,14 @@
             <td colspan="8">
               <div class="detail-grid">
                 <div>
+                  <div class="ap-field-label">请求头（认证类已脱敏）</div>
+                  <pre class="payload">{{ prettyHeaders(log.request_headers) || '（未记录请求头）' }}</pre>
+                </div>
+                <div>
+                  <div class="ap-field-label">响应头（敏感头已脱敏）</div>
+                  <pre class="payload">{{ prettyHeaders(log.response_headers) || '（未记录响应头）' }}</pre>
+                </div>
+                <div>
                   <div class="ap-field-label">请求入参（已脱敏，≤4KB）</div>
                   <pre class="payload">{{ log.request_body || '（无请求体）' }}</pre>
                 </div>
@@ -97,6 +105,18 @@ const expanded = reactive(new Set<string>())
 function toggle(id: string): void {
   if (expanded.has(id)) expanded.delete(id)
   else expanded.add(id)
+}
+
+/** 请求/响应头 JSON → 逐行「Name: value」展示。 */
+function prettyHeaders(raw?: string): string {
+  if (!raw) return ''
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const lines = Object.entries(parsed).map(([key, value]) => `${key}: ${String(value)}`)
+    return lines.join('\n')
+  } catch {
+    return raw
+  }
 }
 </script>
 
