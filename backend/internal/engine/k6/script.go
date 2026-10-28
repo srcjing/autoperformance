@@ -112,6 +112,23 @@ export const options = {
 
 const REQUEST_TIMEOUT = {{ js .TimeoutText }};
 const THINK_TIME = {{ .ThinkTimeSeconds }};
+
+// hasHeader 判断请求头是否存在（名称大小写不敏感）。
+function hasHeader(headers, name) {
+  for (var key in headers) { if (key.toLowerCase() === name) { return true; } }
+  return false;
+}
+
+// withContentType JSON 体未声明 Content-Type 时补默认值（避免服务端因缺少类型拒收）。
+function withContentType(headers, body) {
+  var out = {};
+  for (var key in headers) { out[key] = headers[key]; }
+  if (body && !hasHeader(out, 'content-type') && /^\s*[\[{]/.test(String(body))) {
+    out['Content-Type'] = 'application/json';
+  }
+  return out;
+}
+
 const REQUESTS = [
 {{- range .Requests }}
   {
@@ -127,10 +144,14 @@ const REQUESTS = [
 export default function () {
   for (const req of REQUESTS) {
     // interface_id 标签用于把每条请求样本归属到具体接口（请求详情日志）。
-    const params = { headers: req.headers, tags: { interface_id: req.interfaceId } };
+    const params = {
+      headers: withContentType(req.headers, req.body),
+      tags: { interface_id: req.interfaceId },
+    };
     if (REQUEST_TIMEOUT) { params.timeout = REQUEST_TIMEOUT; }
     let res;
-    if (req.method === 'GET') {
+    // GET 无请求体才用 http.get；带体时必须用 http.request（http.get 会丢弃 body）。
+    if (req.method === 'GET' && !req.body) {
       res = http.get(req.url, params);
     } else {
       res = http.request(req.method, req.url, req.body, params);
@@ -145,6 +166,7 @@ export default function () {
         s: res.status,
         d: Math.round(res.timings.duration),
         e: res.error || '',
+        rb: req.body ? String(req.body).slice(0, 4096) : '',
         b: (res.body === null || res.body === undefined) ? '' : String(res.body).slice(0, 4096),
       }));
     } catch (err) { /* 采集异常不影响压测 */ }
@@ -266,15 +288,32 @@ function applyExtract(res, rules, vars, label) {
   }
 }
 
+// hasHeader 判断请求头是否存在（名称大小写不敏感）。
+function hasHeader(headers, name) {
+  for (var key in headers) { if (key.toLowerCase() === name) { return true; } }
+  return false;
+}
+
+// withContentType JSON 体未声明 Content-Type 时补默认值。
+function withContentType(headers, body) {
+  var out = {};
+  for (var key in headers) { out[key] = headers[key]; }
+  if (body && !hasHeader(out, 'content-type') && /^\s*[\[{]/.test(String(body))) {
+    out['Content-Type'] = 'application/json';
+  }
+  return out;
+}
+
 function send(step, vars) {
   var headers = {};
   for (var key in step.headers) { headers[key] = render(step.headers[key], vars, step.label); }
   var url = render(step.url, vars, step.label);
   var body = step.body ? render(step.body, vars, step.label) : null;
-  var params = { headers: headers, tags: { interface_id: step.interfaceId } };
+  var params = { headers: withContentType(headers, body), tags: { interface_id: step.interfaceId } };
   if (REQUEST_TIMEOUT) { params.timeout = REQUEST_TIMEOUT; }
   var res;
-  if (step.method === 'GET') {
+  // GET 无请求体才用 http.get；带体时必须用 http.request（http.get 会丢弃 body）。
+  if (step.method === 'GET' && !body) {
     res = http.get(url, params);
   } else {
     res = http.request(step.method, url, body, params);
@@ -289,6 +328,7 @@ function send(step, vars) {
       s: res.status,
       d: Math.round(res.timings.duration),
       e: res.error || '',
+      rb: body ? String(body).slice(0, 4096) : '',
       b: (res.body === null || res.body === undefined) ? '' : String(res.body).slice(0, 4096),
     }));
   } catch (err) { /* 采集异常不影响压测 */ }

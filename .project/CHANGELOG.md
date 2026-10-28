@@ -24,3 +24,4 @@
 | 2026-10-28 | 新增 | 测试管理 | 新增测试模式（单接口 `single` / 流程 `flow`）与流程编排：步骤顺序、接口引用、路径/请求头/请求体覆盖、响应变量提取（JSONPath/正则）；步骤作用域三档（once_per_test / once_per_iteration / every_request）对应登录取凭证、主流程流量、每请求刷新；k6 脚本按作用域生成 setup/主流程/每请求前置；前端新增流程步骤编辑器 | `prds/PRD-performance-testing-platform.md` §3.3.6.1、`specs/api-contract.md` §2.4 | dev |
 | 2026-10-28 | 修正 | 测试管理/前端 | 流程编辑体验：可用变量改为可点击 chip（插入光标处）、路径/请求体引用变量高亮、请求头改 Postman 式键值行（接口表单）；新增任务快照同步（待执行任务执行前自动刷新 + 手动 refresh-snapshot），接口配置变更后任务/模板展示与执行同步生效 | `prds/PRD-performance-testing-platform.md`、`specs/api-contract.md` | dev |
 | 2026-10-28 | 修正 | 测试管理 | 流程变量排查能力：k6 输出 AFWARN 行，变量未定义/提取失败写入测试日志（去重 + 上限 100）；前端步骤编辑器对未定义变量红色提示；任务详情新增「流程步骤」表（顺序/接口/作用域/提取/引用） | `specs/api-contract.md` | dev |
+| 2026-10-28 | 修正 | 测试管理 | 请求详情记录实际发送的请求体：k6 AFREQ 回传渲染后 body（≤4KB），流程步骤级 body 覆盖优先；修复 GET 带 body 被丢弃（改 http.request）；JSON 体未声明 Content-Type 时自动补 application/json | `specs/api-contract.md` | dev |

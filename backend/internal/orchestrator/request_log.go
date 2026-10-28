@@ -31,6 +31,8 @@ type capturedRequest struct {
 	Status      int    `json:"s"`
 	DurationMs  int64  `json:"d"`
 	Error       string `json:"e"`
+	// RequestBody 实际发送的请求体（渲染后，≤4KB）。
+	RequestBody string `json:"rb"`
 	Body        string `json:"b"`
 }
 
@@ -98,6 +100,7 @@ func (o *Orchestrator) recordRequestLogs(ctx context.Context, task *domain.TestT
 				OccurredAt:     now,
 				Method:         c.Method,
 				URL:            c.URL,
+				RequestBody:    c.RequestBody,
 				ResponseStatus: c.Status,
 				ErrorMessage:   c.Error,
 				DurationMs:     c.DurationMs,
@@ -111,7 +114,10 @@ func (o *Orchestrator) recordRequestLogs(ctx context.Context, task *domain.TestT
 				if entry.InterfaceID == 0 {
 					entry.InterfaceID = meta.id
 				}
-				entry.RequestBody = meta.body
+				// 脚本未回传实际请求体时（旧脚本/异常）回退接口或步骤配置的请求体。
+				if entry.RequestBody == "" {
+					entry.RequestBody = meta.body
+				}
 			}
 			entries = append(entries, entry)
 		}
@@ -172,6 +178,20 @@ func interfaceIndex(task *domain.TestTask) (map[int64]ifaceMeta, map[string]ifac
 		}
 		if url, err := domain.InterfaceURL(snap.Scheme, task.TargetHost, snap.Port, snap.Path); err == nil && url != "" {
 			byURL[url] = meta
+		}
+	}
+	// 流程模式下步骤级请求体覆盖优先（未开响应体采集时也能看到实际请求入参）。
+	if flow, err := domain.ParseFlow(task.Flow); err == nil && flow.TestModeValue() == domain.TestModeFlow {
+		if steps, err := flow.ValidateSteps(); err == nil {
+			for _, step := range steps {
+				if strings.TrimSpace(step.Body) == "" {
+					continue
+				}
+				if meta, ok := byID[step.InterfaceID]; ok {
+					meta.body = step.Body
+					byID[step.InterfaceID] = meta
+				}
+			}
 		}
 	}
 	return byID, byURL
