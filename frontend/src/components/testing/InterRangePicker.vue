@@ -93,7 +93,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { listInterfaces, listProducts } from '@/api/product'
 import { useAuthStore } from '@/stores/auth'
-import type { InterfaceInfo, ProductInfo } from '@/types'
+import type { InterfaceInfo, InterfaceOption, ProductInfo } from '@/types'
 import { formatInterfaceAddress } from '@/utils/format'
 
 // 接口范围选择器（PRD §3.2「按产品/按接口勾选」，api-contract §2.4 interface_ids）。
@@ -110,6 +110,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string[]): void
   (e: 'update:productIds', value: string[]): void
+  (e: 'update:selectedInterfaces', value: InterfaceOption[]): void
 }>()
 
 const auth = useAuthStore()
@@ -140,6 +141,28 @@ const interfaceIndex = computed(() => {
   }
   return index
 })
+
+/** 已选接口简要信息（供流程编排选择步骤接口）。 */
+const selectedInterfaceOptions = computed<InterfaceOption[]>(() =>
+  props.modelValue.map((id) => {
+    const hit = interfaceIndex.value[id]
+    return hit
+      ? {
+          id,
+          name: hit.item.name,
+          product_name: hit.productName,
+          method: hit.item.method,
+          path: hit.item.path,
+        }
+      : { id, name: `接口 #${id}` }
+  }),
+)
+
+watch(
+  selectedInterfaceOptions,
+  (options) => emit('update:selectedInterfaces', options),
+  { immediate: true, deep: true },
+)
 
 const selectedChips = computed(() =>
   props.modelValue.map((id) => {

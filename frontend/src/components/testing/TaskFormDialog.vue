@@ -69,6 +69,7 @@
             v-model="interfaceIds"
             v-model:product-ids="productIds"
             :disabled="saving"
+            @update:selected-interfaces="selectedInterfaces = $event"
           />
           <p class="ap-muted">
             已选 {{ interfaceIds.length }} 个接口；创建时固化接口与阈值快照，接口上限 500 个。
@@ -77,7 +78,7 @@
 
         <section class="cfg-section">
           <h3 class="cfg-title">3. 测试流程参数</h3>
-          <FlowConfig v-model="flow" :disabled="saving" />
+          <FlowConfig v-model="flow" :interfaces="selectedInterfaces" :disabled="saving" />
         </section>
 
         <section class="cfg-section">
@@ -134,9 +135,10 @@ import {
 import type {
   CleanConfig as CleanConfigModel,
   CreateTaskPayload,
-  FlowConfig as FlowConfigModel,
-  ReportConfig as ReportConfigModel,
-  TestTemplateInfo,
+	FlowConfig as FlowConfigModel,
+	InterfaceOption,
+	ReportConfig as ReportConfigModel,
+	TestTemplateInfo,
 } from '@/types'
 
 // 任务创建弹窗（五要素：环境 / 接口范围 / 流程 / 报告 / 清理 + 可选模板）。
@@ -164,6 +166,7 @@ const hostLoading = ref(false)
 const hostError = ref('')
 const interfaceIds = ref<string[]>([])
 const productIds = ref<string[]>([])
+const selectedInterfaces = ref<InterfaceOption[]>([])
 const flow = ref<FlowConfigModel>(createDefaultFlow())
 const reportConfig = ref<ReportConfigModel>(createDefaultReportConfig())
 const cleanConfig = ref<CleanConfigModel>(createDefaultCleanConfig())
@@ -229,6 +232,7 @@ function reset(): void {
   hostError.value = ''
   interfaceIds.value = []
   productIds.value = []
+  selectedInterfaces.value = []
   flow.value = createDefaultFlow()
   reportConfig.value = createDefaultReportConfig()
   cleanConfig.value = createDefaultCleanConfig()

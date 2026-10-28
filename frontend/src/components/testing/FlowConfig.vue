@@ -1,5 +1,43 @@
 <template>
   <div class="flow-config">
+    <div class="cfg-block">
+      <span class="ap-field-label">测试模式 *</span>
+      <div class="mode-switch">
+        <label class="check">
+          <input
+            type="radio"
+            name="test-mode"
+            value="single"
+            :checked="testMode === 'single'"
+            :disabled="disabled"
+            @change="onTestMode('single')"
+          />
+          <span>单接口测试（所选接口各自独立请求）</span>
+        </label>
+        <label class="check">
+          <input
+            type="radio"
+            name="test-mode"
+            value="flow"
+            :checked="testMode === 'flow'"
+            :disabled="disabled"
+            @change="onTestMode('flow')"
+          />
+          <span>流程测试（按步骤顺序请求，可提取上一步响应作为变量）</span>
+        </label>
+      </div>
+      <p class="ap-muted mode-hint">{{ testModeHint }}</p>
+    </div>
+
+    <div v-if="testMode === 'flow'" class="cfg-block">
+      <FlowStepEditor
+        :model-value="modelValue.steps ?? []"
+        :interfaces="interfaces ?? []"
+        :disabled="disabled"
+        @update:model-value="onStepsChange"
+      />
+    </div>
+
     <div class="cfg-grid">
       <label class="ap-field">
         <span class="ap-field-label">并发模式 *</span>
@@ -238,6 +276,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import FlowStepEditor from './FlowStepEditor.vue'
 import { metricLabel } from '@/utils/threshold'
 import {
   COLLECTION_METRIC_VALUES,
@@ -250,7 +289,10 @@ import type {
   FlowCollectionConfig,
   FlowConfig,
   FlowPreparationConfig,
+  FlowStep,
+  InterfaceOption,
   RampStage,
+  TestMode,
   ThresholdMetric,
 } from '@/types'
 
@@ -259,9 +301,27 @@ import type {
 const props = defineProps<{
   modelValue: FlowConfig
   disabled?: boolean
+  /** 已选接口（流程编排的接口下拉数据源）。 */
+  interfaces?: InterfaceOption[]
 }>()
 
 const emit = defineEmits<{ (e: 'update:modelValue', value: FlowConfig): void }>()
+
+const testMode = computed<TestMode>(() => props.modelValue.test_mode ?? 'single')
+
+const testModeHint = computed(() =>
+  testMode.value === 'flow'
+    ? '流程测试：通过「前置」步骤获取登录凭证等，再在主流程步骤中用 {{变量名}} 引用上一步提取的变量。'
+    : '单接口测试：每个所选接口各自独立压测，无前置依赖。',
+)
+
+function onTestMode(mode: TestMode): void {
+  emit('update:modelValue', { ...props.modelValue, test_mode: mode })
+}
+
+function onStepsChange(steps: FlowStep[]): void {
+  emit('update:modelValue', { ...props.modelValue, steps })
+}
 
 const preparation = computed<FlowPreparationConfig>(
   () =>

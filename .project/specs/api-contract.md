@@ -325,6 +325,33 @@
   ```
   - 并发数必须为正整数且 ≤ 上限（`max_vus`），非法返回 `23004`；接口地址走 URL 白名单。
 
+- `flow` 场景编排子结构（单接口 / 流程测试）：
+  ```json
+  {
+    "test_mode": "single|flow",
+    "capture_response_body": true,
+    "steps": [
+      {
+        "seq": 1,
+        "name": "登录",
+        "interface_id": 3,
+        "scope": "once_per_test|once_per_iteration|every_request",
+        "path": "/api/order?token={{token}}",
+        "headers": {"Authorization": "Bearer {{token}}"},
+        "body": "{\"token\":\"{{token}}\"}",
+        "extract": [
+          {"name": "token", "source": "jsonpath", "expr": "$.data.token"},
+          {"name": "sid", "source": "regex", "expr": "sid=([a-z0-9]+)", "group": 1}
+        ]
+      }
+    ]
+  }
+  ```
+  - `test_mode` 缺省为 `single`；`flow` 模式必须至少一个 `once_per_iteration` 步骤，步骤数 ≤ 50，单步提取规则 ≤ 10。
+  - 步骤 `interface_id` 必须落在任务接口范围内（否则 `10003`）；流程模式下 `interface_ids` 可为空，由步骤自动推导。
+  - 变量作用域由步骤 `scope` 决定：`once_per_test`（整个测试周期一次）/ `once_per_iteration`（每次迭代）/ `every_request`（每个主流程步骤前）。
+  - 路径/请求头/请求体支持 `{{变量名}}` 占位符，运行期由 k6 脚本替换；表达式非法（正则不可编译、JSONPath 未以 `$` 开头）返回 `10003`。
+
 - 处理语义：创建时对「接口范围 + 阈值」**做快照**（`interface_range_snapshot` + `threshold_snapshot`），历史报告可复现；任务状态 `pending`。环境被占用（`testing`）时返回 `23002`（环境互斥，`DES-D-001`）。
 
 **POST /api/v1/tasks/{id}/start** — 执行任务

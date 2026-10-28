@@ -177,6 +177,33 @@ func (s *Service) validateTemplateInput(in CreateTemplateInput) (*domain.TestTem
 	if _, err := flowCfg.Params(s.maxVUs); err != nil {
 		return nil, mapFlowError(err)
 	}
+	steps, err := flowCfg.ValidateSteps()
+	if err != nil {
+		return nil, mapFlowError(err)
+	}
+	interfaceIDs := dedupeIDs(in.InterfaceIDs)
+	normalizedFlow := in.Flow
+	if flowCfg.TestModeValue() == domain.TestModeFlow {
+		stepIDs := flowCfg.StepInterfaceIDs()
+		if len(interfaceIDs) == 0 {
+			interfaceIDs = stepIDs
+		}
+		allowed := make(map[int64]struct{}, len(interfaceIDs))
+		for _, id := range interfaceIDs {
+			allowed[id] = struct{}{}
+		}
+		for _, id := range stepIDs {
+			if _, ok := allowed[id]; !ok {
+				return nil, errcode.ErrParamFmt
+			}
+		}
+		flowCfg.Steps = steps
+		normalized, err := json.Marshal(flowCfg)
+		if err != nil {
+			return nil, errcode.ErrParamFmt
+		}
+		normalizedFlow = normalized
+	}
 	normalizedReport, _, err := domain.ParseReportConfig(in.ReportConfig)
 	if err != nil {
 		return nil, mapConfigError(err)
@@ -189,8 +216,8 @@ func (s *Service) validateTemplateInput(in CreateTemplateInput) (*domain.TestTem
 	return &domain.TestTemplate{
 		Name:         name,
 		EnvIDs:       dedupeIDs(in.EnvIDs),
-		InterfaceIDs: dedupeIDs(in.InterfaceIDs),
-		Flow:         in.Flow,
+		InterfaceIDs: interfaceIDs,
+		Flow:         normalizedFlow,
 		ReportConfig: normalizedReport,
 		CleanConfig:  normalizedClean,
 		Description:  description,

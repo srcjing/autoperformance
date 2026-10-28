@@ -217,12 +217,6 @@ func (s *Service) Create(ctx context.Context, in CreateTaskInput) (*TaskView, er
 	if envID <= 0 {
 		return nil, errcode.ErrParamMiss
 	}
-	if len(interfaceIDs) == 0 {
-		return nil, ErrInterfaceRangeEmpty
-	}
-	if len(interfaceIDs) > domain.MaxInterfaceRange {
-		return nil, errcode.ErrParamFmt
-	}
 	if len(flow) == 0 || len(reportConfig) == 0 || len(cleanConfig) == 0 {
 		return nil, errcode.ErrParamMiss
 	}
@@ -236,6 +230,39 @@ func (s *Service) Create(ctx context.Context, in CreateTaskInput) (*TaskView, er
 	}
 	if _, err := flowCfg.Params(s.maxVUs); err != nil {
 		return nil, mapFlowError(err)
+	}
+	steps, err := flowCfg.ValidateSteps()
+	if err != nil {
+		return nil, mapFlowError(err)
+	}
+	if flowCfg.TestModeValue() == domain.TestModeFlow {
+		// 流程测试：接口范围可由步骤自动推导；步骤引用必须落在任务接口范围内。
+		stepIDs := flowCfg.StepInterfaceIDs()
+		if len(interfaceIDs) == 0 {
+			interfaceIDs = stepIDs
+		}
+		allowed := make(map[int64]struct{}, len(interfaceIDs))
+		for _, id := range interfaceIDs {
+			allowed[id] = struct{}{}
+		}
+		for _, id := range stepIDs {
+			if _, ok := allowed[id]; !ok {
+				return nil, errcode.ErrParamFmt
+			}
+		}
+		// 归一化后的步骤随流程快照固化（保持执行顺序与变量名一致）。
+		flowCfg.Steps = steps
+		normalized, err := json.Marshal(flowCfg)
+		if err != nil {
+			return nil, errcode.ErrParamFmt
+		}
+		flow = normalized
+	}
+	if len(interfaceIDs) == 0 {
+		return nil, ErrInterfaceRangeEmpty
+	}
+	if len(interfaceIDs) > domain.MaxInterfaceRange {
+		return nil, errcode.ErrParamFmt
 	}
 	normalizedReport, _, err := domain.ParseReportConfig(reportConfig)
 	if err != nil {

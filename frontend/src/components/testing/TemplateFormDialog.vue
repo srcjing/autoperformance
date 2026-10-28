@@ -47,13 +47,14 @@
               v-model="interfaceIds"
               v-model:product-ids="productIds"
               :disabled="saving"
+              @update:selected-interfaces="selectedInterfaces = $event"
             />
           </div>
         </section>
 
         <section class="cfg-section">
           <h3 class="cfg-title">2. 测试流程参数</h3>
-          <FlowConfig v-model="flow" :disabled="saving" />
+          <FlowConfig v-model="flow" :interfaces="selectedInterfaces" :disabled="saving" />
         </section>
 
         <section class="cfg-section">
@@ -105,11 +106,12 @@ import {
   validateReportConfig,
 } from '@/utils/testing'
 import type {
-  CleanConfig as CleanConfigModel,
-  FlowConfig as FlowConfigModel,
-  ReportConfig as ReportConfigModel,
-  TestTemplateInfo,
-  TestTemplatePayload,
+	CleanConfig as CleanConfigModel,
+	FlowConfig as FlowConfigModel,
+	InterfaceOption,
+	ReportConfig as ReportConfigModel,
+	TestTemplateInfo,
+	TestTemplatePayload,
 } from '@/types'
 
 // 模板新建/编辑弹窗（TemplateForm → EnvPicker / InterRangePicker / FlowConfig / CleanConfig）。
@@ -132,6 +134,7 @@ const description = ref('')
 const envIds = ref<string[]>([])
 const interfaceIds = ref<string[]>([])
 const productIds = ref<string[]>([])
+const selectedInterfaces = ref<InterfaceOption[]>([])
 const flow = ref<FlowConfigModel>(createDefaultFlow())
 const reportConfig = ref<ReportConfigModel>(createDefaultReportConfig())
 const cleanConfig = ref<CleanConfigModel>(createDefaultCleanConfig())
@@ -155,6 +158,7 @@ function reset(): void {
   envIds.value = [...(template?.env_ids ?? [])]
   interfaceIds.value = [...(template?.interface_ids ?? [])]
   productIds.value = []
+  selectedInterfaces.value = []
   flow.value = template ? normalizeFlow(template.flow) : createDefaultFlow()
   reportConfig.value = template
     ? normalizeReportConfig(template.report_config)

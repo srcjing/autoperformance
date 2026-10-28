@@ -21,3 +21,4 @@
 | 2026-10-26 | 新增 | 工程 | 搭建工程骨架：Go 后端（分层/错误码 1xxxx/中间件链/统一响应）+ Vue3 前端（路由/store/布局/17 页面占位）+ 离线打包脚本；go build/vet、npm install/build/type-check 均通过 | `backend/`、`frontend/`、`deploy/` | - |
 | 2026-10-26 | 新增 | 全局 | 产出实现计划（10 Phase，10 条关键不变量 INV-1~10，核心逻辑 TDD 示例，AC/DFX/红线覆盖索引） | `specs/plan.md` | - |
 | 2026-10-26 | 新增 | 实现 | 按 plan.md 完成全部 10 个 Phase 实现（基础设施/认证分权/环境/产品/测试管理/报告/日志/系统设置/部署打包/联调安全加固），后端 go build/vet/test 与前端 type-check/build 全绿；dev 分支 | `specs/plan.md`、`backend/`、`frontend/`、`deploy/` | dev |
+| 2026-10-28 | 新增 | 测试管理 | 新增测试模式（单接口 `single` / 流程 `flow`）与流程编排：步骤顺序、接口引用、路径/请求头/请求体覆盖、响应变量提取（JSONPath/正则）；步骤作用域三档（once_per_test / once_per_iteration / every_request）对应登录取凭证、主流程流量、每请求刷新；k6 脚本按作用域生成 setup/主流程/每请求前置；前端新增流程步骤编辑器 | `prds/PRD-performance-testing-platform.md` §3.3.6.1、`specs/api-contract.md` §2.4 | dev |

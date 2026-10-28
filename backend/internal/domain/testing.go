@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -29,7 +30,44 @@ const (
 	MaxCleanScripts = 10
 	// MaxCleanScriptBytes 单条清理脚本内容上限（脚本内容需做哈希白名单校验）。
 	MaxCleanScriptBytes = 64 * 1024
+	// MaxFlowSteps 单流程步骤数量上限（保护快照体积与脚本生成时长）。
+	MaxFlowSteps = 50
+	// MaxExtractRulesPerStep 单步骤变量提取规则上限。
+	MaxExtractRulesPerStep = 10
+	// maxFlowExprLen 提取表达式长度上限（JSONPath/正则）。
+	maxFlowExprLen = 512
+	// maxStepBodyBytes 单步骤请求体上限。
+	maxStepBodyBytes = 64 * 1024
 )
+
+// 测试模式（PRD §3.3：单接口测试 / 流程测试）。
+const (
+	// TestModeSingle 单接口测试：所选接口各自独立请求（无步骤编排）。
+	TestModeSingle = "single"
+	// TestModeFlow 流程测试：按步骤顺序请求，上一步响应可提取为变量供后续步骤使用。
+	TestModeFlow = "flow"
+)
+
+// 步骤作用域（变量/取数请求的执行频率，PRD §3.3.7）。
+const (
+	// ScopeOncePerTest 整个测试周期只执行一次（压测前置，如登录取 token；结果全局共享）。
+	ScopeOncePerTest = "once_per_test"
+	// ScopeOncePerIteration 每个 VU 每次迭代执行一次（压测流量主体，迭代内变量共享）。
+	ScopeOncePerIteration = "once_per_iteration"
+	// ScopeEveryRequest 每次主流程请求前执行一次（如每请求刷新签名/nonce）。
+	ScopeEveryRequest = "every_request"
+)
+
+// 变量提取来源。
+const (
+	// ExtractSourceJSONPath 从响应 JSON 按 JSONPath 提取（如 $.data.token）。
+	ExtractSourceJSONPath = "jsonpath"
+	// ExtractSourceRegex 从响应正文按正则提取（可指定捕获组）。
+	ExtractSourceRegex = "regex"
+)
+
+// flowVarNameRE 变量名白名单（JS 标识符风格，支撑脚本内 vars[name] 访问）。
+var flowVarNameRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
 
 // 测试管理领域错误（服务层映射为 10003 / 23004）。
 var (
@@ -178,11 +216,41 @@ type FlowConfig struct {
 	// CaptureResponseBody 是否在压测时采集每个请求的响应体（写请求详情日志）。
 	// 默认关闭：逐请求记录响应体会显著增大输出与影响压测性能（任务级可选）。
 	CaptureResponseBody bool `json:"capture_response_body"`
+	// TestMode 测试模式：single（默认，单接口）/ flow（流程编排）。
+	TestMode string `json:"test_mode"`
+	// Steps 流程步骤（仅 flow 模式使用，按 Seq 升序执行）。
+	Steps []FlowStep `json:"steps"`
 	// 以下阶段配置为透传快照（准备/采集/报告/清理阶段开关与采样间隔）。
 	Preparation json.RawMessage `json:"preparation"`
 	Collection  json.RawMessage `json:"collection"`
 	Report      json.RawMessage `json:"report"`
 	Clean       json.RawMessage `json:"clean"`
+}
+
+// FlowStep 流程步骤（一次接口请求 + 响应变量提取）。
+//
+// Scope 决定该步骤（及其提取变量）的执行频率：
+//   - once_per_test      → 压测前置（k6 setup），结果全局共享；
+//   - once_per_iteration → 每次迭代执行，构成压测流量主体；
+//   - every_request      → 每个主流程步骤前执行（刷新变量）。
+type FlowStep struct {
+	Seq         int               `json:"seq"`
+	Name        string            `json:"name,omitempty"`
+	InterfaceID int64             `json:"interface_id"`
+	Scope       string            `json:"scope"`
+	// Path 路径覆盖（支持 {{var}}；空值使用接口默认路径）。
+	Path    string            `json:"path,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
+	Body        string            `json:"body,omitempty"`
+	Extract     []ExtractRule     `json:"extract,omitempty"`
+}
+
+// ExtractRule 响应变量提取规则（JSONPath 或正则）。
+type ExtractRule struct {
+	Name   string `json:"name"`
+	Source string `json:"source"`
+	Expr   string `json:"expr"`
+	Group  int    `json:"group,omitempty"`
 }
 
 // RampStage 阶梯加压档位（vus 同样走正整数白名单）。
@@ -231,6 +299,139 @@ func ParseFlow(raw json.RawMessage) (*FlowConfig, error) {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidFlow, err)
 	}
 	return &f, nil
+}
+
+// TestModeValue 归一化测试模式（空值视为单接口测试）。
+func (f *FlowConfig) TestModeValue() string {
+	mode := strings.ToLower(strings.TrimSpace(f.TestMode))
+	if mode == "" {
+		return TestModeSingle
+	}
+	return mode
+}
+
+// Steps 校验并归一化流程步骤（按 Seq 升序；仅 flow 模式使用）。
+//
+// 校验点：步骤数量/接口引用/作用域白名单/变量名/提取表达式/正则可编译/请求头与请求体体积。
+func (f *FlowConfig) ValidateSteps() ([]FlowStep, error) {
+	mode := f.TestModeValue()
+	if mode != TestModeSingle && mode != TestModeFlow {
+		return nil, fmt.Errorf("%w: 测试模式不支持", ErrInvalidFlow)
+	}
+	if mode == TestModeSingle {
+		return nil, nil
+	}
+	if len(f.Steps) == 0 {
+		return nil, fmt.Errorf("%w: 流程测试缺少步骤", ErrInvalidFlow)
+	}
+	if len(f.Steps) > MaxFlowSteps {
+		return nil, fmt.Errorf("%w: 流程步骤数量超限", ErrInvalidFlow)
+	}
+
+	steps := make([]FlowStep, 0, len(f.Steps))
+	loadSteps := 0
+	for i := range f.Steps {
+		src := f.Steps[i]
+		step := FlowStep{
+			Seq:         src.Seq,
+			Name:        strings.TrimSpace(src.Name),
+			InterfaceID: src.InterfaceID,
+			Scope:       strings.ToLower(strings.TrimSpace(src.Scope)),
+			Body:        src.Body,
+		}
+		step.Path = strings.TrimSpace(src.Path)
+		if step.Path != "" && !strings.HasPrefix(step.Path, "/") {
+			return nil, fmt.Errorf("%w: 步骤路径需以 / 开头", ErrInvalidFlow)
+		}
+		if len(step.Path) > MaxInterfacePathLen {
+			return nil, fmt.Errorf("%w: 步骤路径过长", ErrInvalidFlow)
+		}
+		if step.InterfaceID <= 0 {
+			return nil, fmt.Errorf("%w: 步骤未选择接口", ErrInvalidFlow)
+		}
+		switch step.Scope {
+		case ScopeOncePerTest, ScopeOncePerIteration, ScopeEveryRequest:
+		case "":
+			step.Scope = ScopeOncePerIteration
+		default:
+			return nil, fmt.Errorf("%w: 步骤作用域不支持", ErrInvalidFlow)
+		}
+		if step.Scope == ScopeOncePerIteration {
+			loadSteps++
+		}
+		if len(step.Body) > maxStepBodyBytes {
+			return nil, fmt.Errorf("%w: 步骤请求体过大", ErrInvalidFlow)
+		}
+		if len(src.Headers) > 0 {
+			step.Headers = make(map[string]string, len(src.Headers))
+			for name, value := range src.Headers {
+				name = strings.TrimSpace(name)
+				if name == "" || len(name) > 128 || len(value) > 4096 {
+					return nil, fmt.Errorf("%w: 步骤请求头非法", ErrInvalidFlow)
+				}
+				for _, r := range name {
+					if r <= 0x20 || r == 0x7f || r == ':' {
+						return nil, fmt.Errorf("%w: 步骤请求头非法", ErrInvalidFlow)
+					}
+				}
+				step.Headers[name] = value
+			}
+		}
+		if len(src.Extract) > MaxExtractRulesPerStep {
+			return nil, fmt.Errorf("%w: 提取规则过数量超限", ErrInvalidFlow)
+		}
+		for _, rule := range src.Extract {
+			name := strings.TrimSpace(rule.Name)
+			if !flowVarNameRE.MatchString(name) {
+				return nil, fmt.Errorf("%w: 变量名非法", ErrInvalidFlow)
+			}
+			source := strings.ToLower(strings.TrimSpace(rule.Source))
+			expr := strings.TrimSpace(rule.Expr)
+			if source != ExtractSourceJSONPath && source != ExtractSourceRegex {
+				return nil, fmt.Errorf("%w: 提取来源不支持", ErrInvalidFlow)
+			}
+			if expr == "" || len(expr) > maxFlowExprLen {
+				return nil, fmt.Errorf("%w: 提取表达式非法", ErrInvalidFlow)
+			}
+			if source == ExtractSourceJSONPath && !strings.HasPrefix(expr, "$") {
+				return nil, fmt.Errorf("%w: JSONPath 必须以 $ 开头", ErrInvalidFlow)
+			}
+			if source == ExtractSourceRegex {
+				if _, err := regexp.Compile(expr); err != nil {
+					return nil, fmt.Errorf("%w: 正则可编译校验失败", ErrInvalidFlow)
+				}
+			}
+			if rule.Group < 0 || rule.Group > 9 {
+				return nil, fmt.Errorf("%w: 捕获组非法", ErrInvalidFlow)
+			}
+			step.Extract = append(step.Extract, ExtractRule{Name: name, Source: source, Expr: expr, Group: rule.Group})
+		}
+		steps = append(steps, step)
+	}
+	if loadSteps == 0 {
+		return nil, fmt.Errorf("%w: 流程测试至少需要一个主流程步骤（once_per_iteration）", ErrInvalidFlow)
+	}
+
+	// 按 Seq 稳定排序，保证执行顺序与前端编排一致。
+	sort.SliceStable(steps, func(i, j int) bool { return steps[i].Seq < steps[j].Seq })
+	return steps, nil
+}
+
+// StepInterfaceIDs 流程步骤引用的接口 ID（去重、保序），供服务层校验快照范围。
+func (f *FlowConfig) StepInterfaceIDs() []int64 {
+	seen := make(map[int64]struct{}, len(f.Steps))
+	ids := make([]int64, 0, len(f.Steps))
+	for _, step := range f.Steps {
+		if step.InterfaceID <= 0 {
+			continue
+		}
+		if _, ok := seen[step.InterfaceID]; ok {
+			continue
+		}
+		seen[step.InterfaceID] = struct{}{}
+		ids = append(ids, step.InterfaceID)
+	}
+	return ids
 }
 
 // Params 校验并归一化流程参数（INV-9 / DES-T-001）。

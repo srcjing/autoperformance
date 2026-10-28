@@ -7,8 +7,11 @@ import type {
   ConcurrencyMode,
   FlowCollectionConfig,
   FlowConfig,
-  FlowConfigPayload,
-  FlowPreparationConfig,
+	FlowConfigPayload,
+	FlowPreparationConfig,
+	FlowStep,
+	FlowStepPayload,
+	FlowStepScope,
   RampStage,
   ReportConfig,
   ReportFormat,
@@ -188,11 +191,13 @@ export function createDefaultFlow(): FlowConfig {
     parameterization: null,
     capture_response_body: false,
     preparation: { connectivity_check: true, interface_ready_check: true, on_failure: 'abort' },
-    collection: {
-      interval: '5s',
-      metrics: ['avg_rt', 'p95', 'p99', 'error_rate', 'throughput', 'success_rate'],
-    },
-  }
+	collection: {
+		interval: '5s',
+		metrics: ['avg_rt', 'p95', 'p99', 'error_rate', 'throughput', 'success_rate'],
+	},
+	test_mode: 'single',
+	steps: [],
+	}
 }
 
 /** 默认报告配置（决策 #4：默认全量生成三种格式）。 */
@@ -264,10 +269,44 @@ export function normalizeFlow(raw: unknown): FlowConfig {
       param && typeof param.path === 'string'
         ? { source: param.source === 'json' ? 'json' : 'csv', path: param.path }
         : null,
-    preparation: normalizePreparation(src.preparation),
-    collection: normalizeCollection(src.collection),
-    capture_response_body: src.capture_response_body === true,
-  }
+		preparation: normalizePreparation(src.preparation),
+		collection: normalizeCollection(src.collection),
+		capture_response_body: src.capture_response_body === true,
+		test_mode: src.test_mode === 'flow' ? 'flow' : 'single',
+		steps: normalizeFlowSteps(src.steps),
+	}
+}
+
+/** 归一化流程步骤（容错缺字段/历史数据）。 */
+export function normalizeFlowSteps(raw: unknown): FlowStep[] {
+	if (!Array.isArray(raw)) return []
+	return raw.map((item, index) => {
+		const src = (item ?? {}) as Partial<FlowStep>
+		const scope: FlowStepScope =
+			src.scope === 'once_per_test' || src.scope === 'every_request'
+				? src.scope
+				: 'once_per_iteration'
+		return {
+			seq: typeof src.seq === 'number' ? src.seq : index + 1,
+			name: typeof src.name === 'string' ? src.name : '',
+			interface_id:
+				typeof src.interface_id === 'number' || typeof src.interface_id === 'string'
+					? String(src.interface_id)
+					: '',
+			scope,
+			path: typeof src.path === 'string' ? src.path : '',
+			headers: src.headers && typeof src.headers === 'object' ? { ...src.headers } : {},
+			body: typeof src.body === 'string' ? src.body : '',
+			extract: Array.isArray(src.extract)
+				? src.extract.map((rule) => ({
+						name: typeof rule.name === 'string' ? rule.name : '',
+						source: rule.source === 'regex' ? 'regex' : 'jsonpath',
+						expr: typeof rule.expr === 'string' ? rule.expr : '',
+						group: typeof rule.group === 'number' ? rule.group : 0,
+					}))
+				: [],
+		}
+	})
 }
 
 /** 表单模型 → 请求体（剔除空档位/空参数化，ramp 模式不提交 target_vus）。 */
@@ -293,8 +332,40 @@ export function toFlowPayload(flow: FlowConfig): FlowConfigPayload {
       path: flow.parameterization.path.trim(),
     }
   }
-  payload.capture_response_body = flow.capture_response_body === true
-  if (flow.preparation) payload.preparation = { ...flow.preparation }
+	payload.capture_response_body = flow.capture_response_body === true
+	payload.test_mode = flow.test_mode === 'flow' ? 'flow' : 'single'
+	if (payload.test_mode === 'flow') {
+		payload.steps = (flow.steps ?? []).map((step, index) => {
+			const item: FlowStepPayload = {
+				seq: index + 1,
+				name: (step.name ?? '').trim(),
+				interface_id: Number(step.interface_id),
+				scope: step.scope,
+			}
+			const path = (step.path ?? '').trim()
+			if (path) item.path = path
+			const body = (step.body ?? '').trim()
+			if (body) item.body = body
+			const headers: Record<string, string> = {}
+			for (const [key, value] of Object.entries(step.headers ?? {})) {
+				if (key.trim()) headers[key.trim()] = value
+			}
+			if (Object.keys(headers).length > 0) item.headers = headers
+			const rules = (step.extract ?? []).filter((rule) => rule.name.trim() && rule.expr.trim())
+			if (rules.length > 0) {
+				item.extract = rules.map((rule) => ({
+					name: rule.name.trim(),
+					source: rule.source,
+					expr: rule.expr.trim(),
+					group: rule.group ?? 0,
+				}))
+			}
+			return item
+		})
+	} else {
+		payload.steps = []
+	}
+	if (flow.preparation) payload.preparation = { ...flow.preparation }
   if (flow.collection) {
     payload.collection = { ...flow.collection, metrics: [...flow.collection.metrics] }
   }
@@ -331,8 +402,31 @@ export function validateFlow(flow: FlowConfig): string {
   if (flow.think_time.trim() && !isValidDurationText(flow.think_time)) {
     return '思考时间格式非法（示例：0.5s）'
   }
-  const param = flow.parameterization
-  if (param) {
+	if (flow.test_mode === 'flow') {
+		const steps = flow.steps ?? []
+		if (steps.length === 0) return '流程测试至少需要一个步骤'
+		if (steps.length > 50) return '流程步骤不能超过 50 个'
+		if (!steps.some((step) => step.scope === 'once_per_iteration')) {
+			return '流程测试至少需要一个主流程步骤（每次迭代执行）'
+		}
+		for (const [index, step] of steps.entries()) {
+			if (!step.interface_id) return `第 ${index + 1} 步未选择接口`
+			if (step.path && !step.path.startsWith('/')) {
+				return `第 ${index + 1} 步路径覆盖需以 / 开头`
+			}
+			for (const [ruleIndex, rule] of (step.extract ?? []).entries()) {
+				if (!rule.name.trim() || !rule.expr.trim()) continue
+				if (!/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(rule.name.trim())) {
+					return `第 ${index + 1} 步第 ${ruleIndex + 1} 条变量名非法（字母/数字/下划线）`
+				}
+				if (rule.source === 'jsonpath' && !rule.expr.trim().startsWith('$')) {
+					return `第 ${index + 1} 步第 ${ruleIndex + 1} 条 JSONPath 需以 $ 开头`
+				}
+			}
+		}
+	}
+	const param = flow.parameterization
+	if (param) {
     const path = param.path.trim()
     if (!path) return '启用参数化后需填写数据文件相对路径'
     if (!SAFE_PATH_RE.test(path) || path.includes('..') || path.startsWith('/')) {

@@ -278,6 +278,15 @@ export interface InterfaceTimeouts {
   total_ms: number
 }
 
+/** 接口简要信息（流程编排中的接口选择项）。 */
+export interface InterfaceOption {
+  id: string
+  name: string
+  product_name?: string
+  method?: HttpMethod
+  path?: string
+}
+
 /** 接口协议（接口不再配置 host，执行期由任务的 target_host 补齐）。 */
 export type InterfaceScheme = 'http' | 'https'
 
@@ -393,6 +402,43 @@ export interface FlowCollectionConfig {
 }
 
 /** 流程参数表单模型（PRD §3.3.6）。 */
+/** 测试模式：单接口测试 / 流程测试。 */
+export type TestMode = 'single' | 'flow'
+
+/** 步骤作用域（变量与其取数请求的执行频率）。 */
+export type FlowStepScope = 'once_per_test' | 'once_per_iteration' | 'every_request'
+
+/** 变量提取来源。 */
+export type ExtractSource = 'jsonpath' | 'regex'
+
+/** 响应变量提取规则。 */
+export interface ExtractRule {
+  name: string
+  source: ExtractSource
+  expr: string
+  group?: number
+}
+
+/** 流程步骤提交体（interface_id 转为数值）。 */
+export interface FlowStepPayload extends Omit<FlowStep, 'interface_id'> {
+  interface_id: number
+}
+
+/** 流程步骤（一次接口请求 + 变量提取）。 */
+export interface FlowStep {
+  seq: number
+  name?: string
+  interface_id: string
+  scope: FlowStepScope
+  /** 路径覆盖（支持 {{var}}，留空使用接口默认路径）。 */
+  path?: string
+  /** 请求头覆盖（值支持 {{var}}）。 */
+  headers?: Record<string, string>
+  /** 请求体覆盖（支持 {{var}}）。 */
+  body?: string
+  extract?: ExtractRule[]
+}
+
 export interface FlowConfig {
   concurrency_mode: ConcurrencyMode
   target_vus: number | null
@@ -404,8 +450,12 @@ export interface FlowConfig {
   parameterization: FlowParameterization | null
   preparation?: FlowPreparationConfig
   collection?: FlowCollectionConfig
-  /** 是否采集每个请求的响应体（写入请求详情；默认关闭）。 */
-  capture_response_body?: boolean
+	/** 是否采集每个请求的响应体（写入请求详情；默认关闭）。 */
+	capture_response_body?: boolean
+	/** 测试模式（默认 single）。 */
+	test_mode?: TestMode
+	/** 流程步骤（仅 flow 模式使用）。 */
+	steps?: FlowStep[]
 }
 
 /** 流程参数提交体（后端 domain.FlowConfig 白名单）。 */
@@ -419,8 +469,10 @@ export interface FlowConfigPayload {
   think_time?: string
   parameterization?: FlowParameterization
   preparation?: FlowPreparationConfig
-  collection?: FlowCollectionConfig
-  capture_response_body?: boolean
+	collection?: FlowCollectionConfig
+	capture_response_body?: boolean
+	test_mode?: TestMode
+	steps?: FlowStepPayload[]
 }
 
 /** 报告输出配置（决策 #4：默认全量三种格式）。 */
