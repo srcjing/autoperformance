@@ -4,10 +4,15 @@
     <aside class="sidebar">
       <div class="logo">auto_performance</div>
       <nav class="nav">
-        <RouterLink to="/overview" class="nav-item nav-single" active-class="active">概览</RouterLink>
+        <RouterLink to="/overview" class="nav-item nav-single" active-class="active">
+          <span class="nav-icon" v-html="ICONS.overview"></span><span>概览</span>
+        </RouterLink>
         <div v-for="group in visibleNavGroups" :key="group.title" class="nav-group">
           <button type="button" class="nav-group-title" @click="toggleGroup(group.title)">
-            <span>{{ group.title }}</span>
+            <span class="nav-group-left">
+              <span class="nav-icon" v-html="iconOf(group.title)"></span>
+              <span class="nav-group-label">{{ group.title }}</span>
+            </span>
             <span class="caret" :class="{ collapsed: collapsedGroups.has(group.title) }">▾</span>
           </button>
           <div v-show="!collapsedGroups.has(group.title)" class="nav-items">
@@ -124,6 +129,27 @@ const visibleNavGroups = computed<NavGroup[]>(() =>
 
 // 一级模块默认全部收起（只显示标题，点击展开子模块）。
 const collapsedGroups = reactive(new Set<string>(navGroups.map((group) => group.title)))
+
+// 一级菜单图标（线性图标，与参考后台一致：左侧图标 + 文字 + 右侧箭头）。
+const ICONS: Record<string, string> = {
+  overview:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z"/><path d="M9 22V12h6v10"/></svg>',
+  '环境管理':
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg>',
+  '产品管理':
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/></svg>',
+  '测试管理':
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6L5 19a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2L14 9V3"/></svg>',
+  '报告管理':
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8"/></svg>',
+  '日志管理':
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+  '系统设置':
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+}
+function iconOf(title: string): string {
+  return ICONS[title] ?? ''
+}
 function toggleGroup(title: string): void {
   if (collapsedGroups.has(title)) collapsedGroups.delete(title)
   else collapsedGroups.add(title)
@@ -168,64 +194,86 @@ async function onLogout(): Promise<void> {
   padding: 12px 0;
 }
 
-/* 一级模块：独立分组标题（加粗、亮色、分组上下间距） */
+/* 一级模块：图标 + 文字 + 折叠箭头（对齐参考后台） */
 .nav-group-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: calc(100% - 16px);
-  margin: 8px 8px 2px;
-  padding: 9px 12px;
+  margin: 2px 8px;
+  padding: 10px 12px;
   font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: #f9fafb;
+  font-weight: 500;
+  color: #c9d1d9;
   background: none;
   border: none;
   border-radius: 6px;
   cursor: pointer;
   font-family: inherit;
   text-align: left;
-  transition: background 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 .nav-group-title:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
 }
-.nav-group:first-of-type .nav-group-title {
-  margin-top: 4px;
+.nav-group-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: #9ca3af;
+  flex: none;
+}
+.nav-icon svg {
+  width: 16px;
+  height: 16px;
 }
 .caret {
   font-size: 11px;
   transition: transform 0.2s;
-  color: #9ca3af;
+  color: #6b7280;
+  flex: none;
 }
 .caret.collapsed {
   transform: rotate(-90deg);
 }
-.nav-single {
-  margin: 4px 8px 8px;
-  padding: 9px 12px;
-  border-radius: 6px;
-  font-weight: 700;
-  color: #f9fafb;
-}
 
-/* 二级子项：左侧树形竖线 + 缩进 + 更小更暗，与一级明显区分 */
+/* 二级子项：纯缩进（对齐一级图标+文字），选中蓝色背景 */
 .nav-items {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  margin: 2px 8px 6px 22px;
-  padding-left: 8px;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  margin: 2px 8px 4px;
+  padding-left: 38px;
 }
 .nav-item {
   display: block;
-  padding: 7px 10px;
+  padding: 8px 10px;
   border-radius: 5px;
   font-size: 13px;
   color: #9ca3af;
   transition: background 0.15s, color 0.15s;
+}
+.nav-item.nav-single {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 8px 6px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-weight: 500;
+  color: #c9d1d9;
+}
+.nav-item.nav-single .nav-icon {
+  color: #9ca3af;
 }
 
 .nav-item:hover {
