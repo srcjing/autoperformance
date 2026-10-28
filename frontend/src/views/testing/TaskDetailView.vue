@@ -313,7 +313,7 @@ const cleanSummary = computed(() => {
   const labels = config.actions
     .filter((action) => action !== 'script')
     .map((action) => CLEAN_ACTION_OPTIONS.find((item) => item.value === action)?.label ?? action)
-  if (config.scripts.length > 0) labels.push(`脚本 ×${config.scripts.length}`)
+  if ((config.scripts ?? []).length > 0) labels.push(`脚本 ×${(config.scripts ?? []).length}`)
   return labels.join('、') || '-'
 })
 

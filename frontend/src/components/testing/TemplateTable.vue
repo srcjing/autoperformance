@@ -91,17 +91,18 @@ function modeLabel(mode?: string): string {
 
 /** 报告格式（未配置按默认全量）。 */
 function formatLabel(config: ReportConfig | null): string {
-  if (!config || config.formats.length === 0) return '全量'
+  if (!config?.formats || config.formats.length === 0) return '全量'
   return config.formats.map((format) => format.toUpperCase()).join(' / ')
 }
 
 /** 清理动作摘要（内置动作 + 脚本数量）。 */
 function cleanSummary(config: CleanConfig | null): string {
   if (!config) return '-'
-  const labels = config.actions
+  const labels = (config.actions ?? [])
     .filter((action) => action !== 'script')
     .map((action) => CLEAN_ACTION_OPTIONS.find((item) => item.value === action)?.label ?? action)
-  if (config.scripts.length > 0) labels.push(`脚本 ×${config.scripts.length}`)
+  const scriptCount = config.scripts?.length ?? 0
+  if (scriptCount > 0) labels.push(`脚本 ×${scriptCount}`)
   return labels.join('、') || '-'
 }
 </script>

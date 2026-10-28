@@ -456,7 +456,7 @@ type CleanScript struct {
 // CleanConfig 清理配置（动作列表 + 用户脚本 + 执行时机）。
 type CleanConfig struct {
 	Actions []string      `json:"actions"`
-	Scripts []CleanScript `json:"scripts,omitempty"`
+	Scripts []CleanScript `json:"scripts"` // 始终返回数组（前端依赖 .length）
 	Timing  string        `json:"timing,omitempty"`
 }
 
@@ -486,6 +486,9 @@ func ParseCleanConfig(raw json.RawMessage) (json.RawMessage, *CleanConfig, error
 		actions = append(actions, v)
 	}
 	cfg.Actions = actions
+	if cfg.Scripts == nil {
+		cfg.Scripts = []CleanScript{}
+	}
 
 	if len(cfg.Scripts) > MaxCleanScripts {
 		return nil, nil, fmt.Errorf("%w: 清理脚本数量超限", ErrInvalidCleanConfig)

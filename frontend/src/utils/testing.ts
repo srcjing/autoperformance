@@ -341,14 +341,14 @@ export function validateFlow(flow: FlowConfig): string {
 
 /** 报告配置校验。 */
 export function validateReportConfig(config: ReportConfig): string {
-  if (config.formats.length === 0) return '至少选择一种报告格式'
+  if ((config.formats ?? []).length === 0) return '至少选择一种报告格式'
   return ''
 }
 
 /** 清理配置校验（返回空串表示通过）。 */
 export function validateCleanConfig(config: CleanConfig): string {
   // 允许不选任何动作：表示不执行环境清理（接口压测默认场景）。
-  if (config.scripts.length > 10) return '清理脚本不能超过 10 条'
+  if ((config.scripts ?? []).length > 10) return '清理脚本不能超过 10 条'
   for (const [index, script] of config.scripts.entries()) {
     if (!script.host_id) return `第 ${index + 1} 条清理脚本需选择可信主机`
     const path = script.path.trim()
@@ -366,7 +366,7 @@ export function validateCleanConfig(config: CleanConfig): string {
 /** 提交前归一化清理配置：补齐/移除 script 动作（后端要求脚本动作必须伴随脚本项）。 */
 export function toCleanPayload(config: CleanConfig): CleanConfig {
   const actions: CleanAction[] = config.actions.filter((action) => action !== 'script')
-  if (config.scripts.length > 0) actions.push('script')
+  if ((config.scripts ?? []).length > 0) actions.push('script')
   const scripts: CleanScript[] = config.scripts.map((script) => {
     const item: CleanScript = { host_id: script.host_id, path: script.path.trim() }
     const sha = script.sha256?.trim().toLowerCase()

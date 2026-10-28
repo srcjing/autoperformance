@@ -35,7 +35,7 @@
         <button
           type="button"
           class="ap-btn ap-btn-ghost ap-btn-sm"
-          :disabled="disabled || modelValue.scripts.length >= 10"
+          :disabled="disabled || (modelValue.scripts ?? []).length >= 10"
           @click="addScript"
         >
           添加脚本
@@ -48,7 +48,7 @@
       <p v-else-if="hostsLoading" class="ap-muted">加载可信主机…</p>
       <p v-else-if="hostsError" class="ap-muted">{{ hostsError }}</p>
 
-      <table v-if="modelValue.scripts.length > 0" class="ap-table script-table">
+      <table v-if="(modelValue.scripts ?? []).length > 0" class="ap-table script-table">
         <thead>
           <tr>
             <th>可信主机</th>
@@ -144,7 +144,7 @@ function onToggleAction(action: CleanAction, event: Event): void {
   if (checked) set.add(action)
   else set.delete(action)
   const actions: CleanAction[] = Array.from(set)
-  if (props.modelValue.scripts.length > 0) actions.push('script')
+  if ((props.modelValue.scripts ?? []).length > 0) actions.push('script')
   patch({ actions })
 }
 
