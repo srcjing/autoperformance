@@ -34,3 +34,4 @@
 | 2026-10-28 | 修正 | 请求配置 | 请求体数组元素不再暴露 [0] 下标：改为只读「元素 N」标签，数组行按钮改为「+ 元素」，增删后自动重排下标（[0..n] 无空洞） | `specs/api-contract.md` | dev |
 | 2026-10-29 | 新增 | 请求配置 | 新增内置动态值占位符（{{$uuid}}/{{$unique}}/{{$ts}}/{{$tsSec}}/{{$now}}/{{$seq}}/{{$randInt(a,b)}}/{{$randStr(n)}}/{{$randDigits(n)}}），每次请求重新生成；前端两个编辑器提供可点击 chip | `prds/PRD-performance-testing-platform.md` §3.3.6.1 | dev |
 | 2026-10-29 | 修正 | 请求配置 | 修复 {{$seq}} 在多 VU 下重复：原为每 VU 独立计数器（各 VU 都从 1 开始），改为 VU 前缀 + 6 位迭代号（1000001/2000001…），全局唯一且同 VU 递增；同一字段内重复引用取值一致 | `prds/PRD-performance-testing-platform.md` §3.3.6.1 | dev |
+| 2026-10-29 | 修正 | 请求配置 | 引用变量的参数增加显式标识：行内「变量 / 动态」徽标 + 左侧色条与底色，顶部提供「仅看变量（N）」过滤；请求体与请求头编辑器同时生效 | `specs/frontend-structure.md` | dev |

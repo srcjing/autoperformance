@@ -3,6 +3,16 @@
     <div class="rows-head">
       <span class="ap-field-label">{{ label || '请求体参数' }}</span>
       <div class="rows-actions">
+        <button
+          v-if="refCount > 0"
+          type="button"
+          class="ap-btn ap-btn-ghost ap-btn-sm"
+          :class="{ 'is-on': onlyVars }"
+          :disabled="disabled"
+          @click="onlyVars = !onlyVars"
+        >
+          {{ onlyVars ? '显示全部' : `仅看变量（${refCount}）` }}
+        </button>
         <button type="button" class="ap-btn ap-btn-ghost ap-btn-sm" :disabled="disabled" @click="openImport">
           粘贴 JSON 识别
         </button>
@@ -13,6 +23,20 @@
           {{ showPreview ? '收起预览' : '预览 JSON' }}
         </button>
       </div>
+    </div>
+
+    <div v-if="variables && variables.length > 0" class="var-hint">
+      <span class="ap-muted">可用变量（点击插入到当前输入框）：</span>
+      <button
+        v-for="name in variables"
+        :key="name"
+        type="button"
+        class="var-chip"
+        :disabled="disabled"
+        @click="insertVar(name)"
+      >
+        {{ name }}
+      </button>
     </div>
 
     <div class="var-hint">
@@ -27,20 +51,6 @@
         @click="insertRaw(item.token)"
       >
         {{ item.label }}
-      </button>
-    </div>
-
-    <div v-if="variables && variables.length > 0" class="var-hint">
-      <span class="ap-muted">可用变量（点击插入到当前输入框）：</span>
-      <button
-        v-for="name in variables"
-        :key="name"
-        type="button"
-        class="var-chip"
-        :disabled="disabled"
-        @click="insertVar(name)"
-      >
-        {{ name }}
       </button>
     </div>
 
@@ -73,26 +83,36 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(row, index) in rows" :key="index" :class="{ 'row-disabled': !row.enabled }">
+        <tr
+          v-for="entry in visibleRows"
+          :key="entry.index"
+          :class="{
+            'row-disabled': !entry.row.enabled,
+            'row-var': hasUserVar(entry.row),
+            'row-dyn': !hasUserVar(entry.row) && hasDynamic(entry.row),
+          }"
+        >
           <td class="col-enable">
-            <input v-model="row.enabled" type="checkbox" :disabled="disabled" @change="onChange" />
+            <input v-model="entry.row.enabled" type="checkbox" :disabled="disabled" @change="onChange" />
           </td>
           <td class="col-key">
-            <div class="key-cell" :style="{ paddingLeft: `${row.depth * 18}px` }">
-              <span v-if="row.depth > 0" class="tree-mark">└</span>
-              <span v-if="isIndexKey(row.key)" class="index-label">元素 {{ indexKeyNumber(row.key) }}</span>
+            <div class="key-cell" :style="{ paddingLeft: `${entry.row.depth * 18}px` }">
+              <span v-if="entry.row.depth > 0" class="tree-mark">└</span>
+              <span v-if="isIndexKey(entry.row.key)" class="index-label">元素 {{ indexKeyNumber(entry.row.key) }}</span>
               <input
                 v-else
-                v-model="row.key"
+                v-model="entry.row.key"
                 :disabled="disabled"
-                :placeholder="row.depth > 0 ? '子参数名' : '参数名'"
+                :placeholder="entry.row.depth > 0 ? '子参数名' : '参数名'"
                 @focus="focusRef = $event.target as HTMLInputElement"
                 @input="onChange"
               />
+              <span v-if="hasUserVar(entry.row)" class="ref-badge var">变量</span>
+              <span v-else-if="hasDynamic(entry.row)" class="ref-badge dyn">动态</span>
             </div>
           </td>
           <td class="col-type">
-            <select v-model="row.type" :disabled="disabled" @change="onChange">
+            <select v-model="entry.row.type" :disabled="disabled" @change="onChange">
               <option value="string">字符串</option>
               <option value="number">数字</option>
               <option value="boolean">布尔</option>
@@ -104,14 +124,14 @@
           </td>
           <td>
             <input
-              v-model="row.value"
-              :disabled="disabled || row.type === 'null' || row.type === 'object' || row.type === 'array'"
-              :placeholder="row.type === 'json' ? '{} 或 []' : '值，支持 {{变量}}'"
+              v-model="entry.row.value"
+              :disabled="disabled || entry.row.type === 'null' || entry.row.type === 'object' || entry.row.type === 'array'"
+              :placeholder="entry.row.type === 'json' ? '{} 或 []' : '值，支持 {{变量}} 与 {{$动态值}}'"
               @focus="focusRef = $event.target as HTMLInputElement"
               @input="onChange"
             />
-            <span v-if="usedVars(row.value).length" class="cell-vars">
-              <span v-for="name in usedVars(row.value)" :key="name" class="var-ref">{{ name }}</span>
+            <span v-if="refsOf(entry.row.value).length" class="cell-vars">
+              <span v-for="name in refsOf(entry.row.value)" :key="name" class="var-ref">{{ name }}</span>
             </span>
           </td>
           <td class="col-op">
@@ -119,16 +139,16 @@
               type="button"
               class="ap-btn ap-btn-ghost ap-btn-sm"
               :disabled="disabled"
-              :title="row.type === 'array' ? '在数组下新增一个元素' : '在该参数下增加一个嵌套子参数'"
-              @click="addChild(index)"
+              :title="entry.row.type === 'array' ? '在数组下新增一个元素' : '在该参数下增加一个嵌套子参数'"
+              @click="addChild(entry.index)"
             >
-              {{ row.type === 'array' ? '+ 元素' : '+ 嵌套' }}
+              {{ entry.row.type === 'array' ? '+ 元素' : '+ 嵌套' }}
             </button>
             <button
               type="button"
               class="ap-btn ap-btn-danger ap-btn-sm"
               :disabled="disabled"
-              @click="removeRow(index)"
+              @click="removeRow(entry.index)"
             >
               删除
             </button>
@@ -138,6 +158,9 @@
     </table>
     <p v-else class="ap-muted">
       暂无请求体参数；可「添加参数」逐项填写，或「粘贴 JSON 识别」自动展开（含嵌套）。
+    </p>
+    <p v-if="onlyVars && rows.length > 0 && visibleRows.length === 0" class="ap-muted">
+      当前没有引用变量或动态值的参数。
     </p>
 
     <p v-if="error" class="ap-alert ap-alert-error">{{ error }}</p>
@@ -176,11 +199,14 @@ const emit = defineEmits<{ (e: 'update:modelValue', value: string): void }>()
 const rows = ref<BodyRow[]>([])
 const error = ref('')
 const showPreview = ref(false)
+const onlyVars = ref(false)
 const importOpen = ref(false)
 const importText = ref('')
 const importError = ref('')
 const focusRef = ref<HTMLInputElement | null>(null)
-const VAR_RE = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g
+
+const USER_VAR_RE = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g
+const DYNAMIC_RE = /\{\{\s*\$[A-Za-z]/
 
 const previewText = computed(() => {
   const result = buildJson(rows.value)
@@ -188,6 +214,24 @@ const previewText = computed(() => {
   if (result.value === null) return ''
   return JSON.stringify(result.value, null, 2)
 })
+
+/** 引用了用户提取变量的行。 */
+function hasUserVar(row: BodyRow): boolean {
+  return /\{\{\s*[A-Za-z0-9_]+\s*\}\}/.test(row.value)
+}
+
+/** 引用了内置动态值的行。 */
+function hasDynamic(row: BodyRow): boolean {
+  return DYNAMIC_RE.test(row.value)
+}
+
+const refCount = computed(() => rows.value.filter((row) => hasUserVar(row) || hasDynamic(row)).length)
+
+const visibleRows = computed(() =>
+  rows.value
+    .map((row, index) => ({ row, index }))
+    .filter((entry) => !onlyVars.value || hasUserVar(entry.row) || hasDynamic(entry.row)),
+)
 
 watch(
   () => props.modelValue,
@@ -273,10 +317,12 @@ function applyImport(): void {
   onChange()
 }
 
-function usedVars(text: string): string[] {
+/** 值里引用的占位符（含动态值，动态值以 $ 前缀展示）。 */
+function refsOf(text: string): string[] {
   const names = new Set<string>()
   if (!text) return []
-  for (const match of text.matchAll(VAR_RE)) names.add(match[1])
+  for (const match of text.matchAll(USER_VAR_RE)) names.add(match[1])
+  for (const match of text.matchAll(/\{\{\s*\$([A-Za-z][A-Za-z0-9]*)/g)) names.add(`$${match[1]}`)
   return [...names]
 }
 
@@ -300,23 +346,7 @@ function insertRaw(token: string): void {
 }
 
 function insertVar(name: string): void {
-  const token = `{{${name}}}`
-  const el = focusRef.value
-  if (!el) {
-    const last = rows.value[rows.value.length - 1]
-    if (last) last.value = `${last.value}${token}`
-    onChange()
-    return
-  }
-  const start = el.selectionStart ?? el.value.length
-  const end = el.selectionEnd ?? start
-  el.value = el.value.slice(0, start) + token + el.value.slice(end)
-  el.dispatchEvent(new Event('input'))
-  requestAnimationFrame(() => {
-    el.focus()
-    const pos = start + token.length
-    el.setSelectionRange(pos, pos)
-  })
+  insertRaw(`{{${name}}}`)
 }
 </script>
 
@@ -338,6 +368,11 @@ function insertVar(name: string): void {
   gap: 6px;
   flex-wrap: wrap;
 }
+.rows-actions .is-on {
+  border-color: #2563eb;
+  color: #1d4ed8;
+  background: #eef3ff;
+}
 .var-hint {
   display: flex;
   flex-wrap: wrap;
@@ -353,6 +388,11 @@ function insertVar(name: string): void {
   padding: 1px 10px;
   font-size: 12px;
   cursor: pointer;
+}
+.dyn-chip {
+  border-color: #f5a623;
+  background: #fff6e8;
+  color: #b45309;
 }
 .var-ref {
   display: inline-block;
@@ -410,6 +450,36 @@ function insertVar(name: string): void {
   color: #64748b;
   font-size: 12px;
 }
+.ref-badge {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.ref-badge.var {
+  background: #e8f0ff;
+  color: #1d4ed8;
+  border: 1px solid #b9ccff;
+}
+.ref-badge.dyn {
+  background: #fff6e8;
+  color: #b45309;
+  border: 1px solid #f5c26b;
+}
+.body-table tbody tr.row-var > td:first-child {
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+.body-table tbody tr.row-dyn > td:first-child {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+.body-table tbody tr.row-var {
+  background: #f7faff;
+}
+.body-table tbody tr.row-dyn {
+  background: #fffcf5;
+}
 .body-table input,
 .body-table select {
   width: 100%;
@@ -421,7 +491,7 @@ function insertVar(name: string): void {
   text-align: center;
 }
 .body-table .col-key {
-  width: 26%;
+  width: 28%;
 }
 .body-table .col-type {
   width: 110px;

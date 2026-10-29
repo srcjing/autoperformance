@@ -3,6 +3,16 @@
     <div class="rows-head">
       <span class="ap-field-label">{{ label }}</span>
       <div class="rows-actions">
+        <button
+          v-if="refCount > 0"
+          type="button"
+          class="ap-btn ap-btn-ghost ap-btn-sm"
+          :class="{ 'is-on': onlyVars }"
+          :disabled="disabled"
+          @click="onlyVars = !onlyVars"
+        >
+          {{ onlyVars ? '显示全部' : `仅看变量（${refCount}）` }}
+        </button>
         <button type="button" class="ap-btn ap-btn-ghost ap-btn-sm" :disabled="disabled" @click="importOpen = !importOpen">
           粘贴请求头识别
         </button>
@@ -69,34 +79,44 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(row, index) in rows" :key="index" :class="{ 'row-disabled': !row.enabled }">
+        <tr
+          v-for="entry in visibleRows"
+          :key="entry.index"
+          :class="{
+            'row-disabled': !entry.row.enabled,
+            'row-var': hasUserVar(entry.row.value),
+            'row-dyn': !hasUserVar(entry.row.value) && hasDynamic(entry.row.value),
+          }"
+        >
           <td class="col-enable">
-            <input v-model="row.enabled" type="checkbox" :disabled="disabled" @change="emitRows" />
+            <input v-model="entry.row.enabled" type="checkbox" :disabled="disabled" @change="emitRows" />
           </td>
           <td class="col-name">
             <input
-              v-model="row.name"
+              v-model="entry.row.name"
               :disabled="disabled"
               placeholder="Content-Type"
               list="ap-common-headers"
               @focus="focusRef = $event.target as HTMLInputElement"
               @input="emitRows"
             />
+            <span v-if="hasUserVar(entry.row.value)" class="ref-badge var">变量</span>
+            <span v-else-if="hasDynamic(entry.row.value)" class="ref-badge dyn">动态</span>
           </td>
           <td>
             <input
-              v-model="row.value"
+              v-model="entry.row.value"
               :disabled="disabled"
               placeholder="值，支持 {{变量}}"
               @focus="focusRef = $event.target as HTMLInputElement"
               @input="emitRows"
             />
-            <span v-if="usedVars(row.value).length" class="cell-vars">
-              <span v-for="name in usedVars(row.value)" :key="name" class="var-ref">{{ name }}</span>
+            <span v-if="usedVars(entry.row.value).length" class="cell-vars">
+              <span v-for="name in usedVars(entry.row.value)" :key="name" class="var-ref">{{ name }}</span>
             </span>
           </td>
           <td class="col-op">
-            <button type="button" class="ap-btn ap-btn-danger ap-btn-sm" :disabled="disabled" @click="removeRow(index)">
+            <button type="button" class="ap-btn ap-btn-danger ap-btn-sm" :disabled="disabled" @click="removeRow(entry.index)">
               删除
             </button>
           </td>
@@ -104,6 +124,9 @@
       </tbody>
     </table>
     <p v-else class="ap-muted">暂无请求头，点击「添加请求头」新增。</p>
+    <p v-if="onlyVars && rows.length > 0 && visibleRows.length === 0" class="ap-muted">
+      当前没有引用变量或动态值的请求头。
+    </p>
 
     <datalist id="ap-common-headers">
       <option value="Content-Type" />
@@ -120,7 +143,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { DYNAMIC_VALUE_CHIPS } from '@/utils/testing'
 
 // 请求头行式编辑器（Postman 风格：启用 / 键 / 值），值支持 {{变量}} 与点击插入。
@@ -143,6 +166,23 @@ interface HeaderRow {
 const rows = ref<HeaderRow[]>([])
 const focusRef = ref<HTMLInputElement | null>(null)
 const importOpen = ref(false)
+const onlyVars = ref(false)
+
+function hasUserVar(value: string): boolean {
+  return /\{\{\s*[A-Za-z0-9_]+\s*\}\}/.test(value || '')
+}
+
+function hasDynamic(value: string): boolean {
+  return /\{\{\s*\$/.test(value || '')
+}
+
+const refCount = computed(() => rows.value.filter((row) => hasUserVar(row.value) || hasDynamic(row.value)).length)
+
+const visibleRows = computed(() =>
+  rows.value
+    .map((row, index) => ({ row, index }))
+    .filter((entry) => !onlyVars.value || hasUserVar(entry.row.value) || hasDynamic(entry.row.value)),
+)
 const importText = ref('')
 const importError = ref('')
 const VAR_RE = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g
@@ -232,6 +272,7 @@ function usedVars(text: string): string[] {
   const names = new Set<string>()
   if (!text) return []
   for (const match of text.matchAll(VAR_RE)) names.add(match[1])
+  for (const match of text.matchAll(/\{\{\s*\$([A-Za-z][A-Za-z0-9]*)/g)) names.add(`$${match[1]}`)
   return [...names]
 }
 
@@ -316,6 +357,47 @@ function insertVar(name: string): void {
 .import-error {
   color: #b42318;
   font-size: 12px;
+}
+.rows-actions .is-on {
+  border-color: #2563eb;
+  color: #1d4ed8;
+  background: #eef3ff;
+}
+.ref-badge {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+  margin-left: 4px;
+}
+.ref-badge.var {
+  background: #e8f0ff;
+  color: #1d4ed8;
+  border: 1px solid #b9ccff;
+}
+.ref-badge.dyn {
+  background: #fff6e8;
+  color: #b45309;
+  border: 1px solid #f5c26b;
+}
+.header-table tbody tr.row-var > td:first-child {
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+.header-table tbody tr.row-dyn > td:first-child {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+.header-table tbody tr.row-var {
+  background: #f7faff;
+}
+.header-table tbody tr.row-dyn {
+  background: #fffcf5;
+}
+.header-table tbody tr.row-var td.col-name,
+.header-table tbody tr.row-dyn td.col-name {
+  display: flex;
+  align-items: center;
 }
 .var-hint {
   display: flex;
