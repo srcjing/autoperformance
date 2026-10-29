@@ -31,3 +31,4 @@
 | 2026-10-28 | 修正 | 测试管理 | Cookie 传播加固：每迭代写回（避免网关轮换出未认证 session 覆盖 jar）、保留 Path/Domain/Secure/HttpOnly、变量键改 __af_cookies 并禁止用户变量使用 __af_ 前缀、setup 未获得 Cookie 时写测试日志告警；定位并清理导致 401 的接口级 Cookie 认证头残留 | `prds/PRD-performance-testing-platform.md` §3.3.6.1 | dev |
 | 2026-10-28 | 修正 | 请求配置 | 请求体改为「键值行 + +嵌套按钮」：容器行（对象/数组）承载子级，不再要求手写 a.b 路径；接口弹窗新增 4 个分区（基本信息/请求头/请求体/超时与描述）；请求头支持粘贴识别填充 | `specs/api-contract.md` | dev |
 | 2026-10-28 | 修正 | 全局交互 | 所有弹窗/抽屉取消「点击遮罩关闭」，只保留关闭/取消按钮，避免误触丢失编辑内容（18 处） | `specs/frontend-structure.md` | dev |
+| 2026-10-28 | 修正 | 请求配置 | 请求体数组元素不再暴露 [0] 下标：改为只读「元素 N」标签，数组行按钮改为「+ 元素」，增删后自动重排下标（[0..n] 无空洞） | `specs/api-contract.md` | dev |

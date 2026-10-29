@@ -26,6 +26,35 @@ export interface BodyRow {
   enabled: boolean
 }
 
+/** 是否数组下标键（`[0]` 形式）。 */
+export function isIndexKey(key: string): boolean {
+  return /^\[\d+\]$/.test(key.trim())
+}
+
+/** 数组下标键的序号（`[0]` → 1，用于展示「元素 1」）。 */
+export function indexKeyNumber(key: string): number {
+  const match = key.trim().match(/^\[(\d+)\]$/)
+  return match ? Number(match[1]) + 1 : 1
+}
+
+/** 重排数组元素下标：删除/插入后保证 `[0..n]` 连续无空洞。 */
+export function normalizeIndexKeys(rows: BodyRow[]): BodyRow[] {
+  const out = rows.map((row) => ({ ...row }))
+  const stack: { type: BodyValueType; count: number }[] = []
+  for (const row of out) {
+    stack.length = Math.min(stack.length, row.depth)
+    const parent = row.depth > 0 ? stack[row.depth - 1] : undefined
+    if (parent && parent.type === 'array') {
+      if (!row.key.trim() || isIndexKey(row.key)) {
+        row.key = `[${parent.count}]`
+        parent.count += 1
+      }
+    }
+    stack[row.depth] = { type: row.type, count: 0 }
+  }
+  return out
+}
+
 /** 是否容器行（对象/数组）。 */
 export function isContainer(row: BodyRow): boolean {
   return row.type === 'object' || row.type === 'array'

@@ -65,7 +65,9 @@
           <td class="col-key">
             <div class="key-cell" :style="{ paddingLeft: `${row.depth * 18}px` }">
               <span v-if="row.depth > 0" class="tree-mark">└</span>
+              <span v-if="isIndexKey(row.key)" class="index-label">元素 {{ indexKeyNumber(row.key) }}</span>
               <input
+                v-else
                 v-model="row.key"
                 :disabled="disabled"
                 :placeholder="row.depth > 0 ? '子参数名' : '参数名'"
@@ -102,10 +104,10 @@
               type="button"
               class="ap-btn ap-btn-ghost ap-btn-sm"
               :disabled="disabled"
-              title="在该参数下增加一个嵌套子参数"
+              :title="row.type === 'array' ? '在数组下新增一个元素' : '在该参数下增加一个嵌套子参数'"
               @click="addChild(index)"
             >
-              + 嵌套
+              {{ row.type === 'array' ? '+ 元素' : '+ 嵌套' }}
             </button>
             <button
               type="button"
@@ -134,7 +136,15 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { buildJson, isContainer, jsonTextToRows, type BodyRow } from '@/utils/bodyRows'
+import {
+  buildJson,
+  indexKeyNumber,
+  isContainer,
+  isIndexKey,
+  jsonTextToRows,
+  normalizeIndexKeys,
+  type BodyRow,
+} from '@/utils/bodyRows'
 
 // 请求体编辑器：键值行 + 「+ 嵌套」按钮生成子级，自动还原成嵌套 JSON。
 const props = defineProps<{
@@ -179,6 +189,7 @@ watch(
 )
 
 function onChange(): void {
+  rows.value = normalizeIndexKeys(rows.value)
   const result = buildJson(rows.value)
   if (result.error) {
     error.value = result.error
@@ -199,13 +210,18 @@ function addChild(index: number): void {
   let insertAt = index + 1
   while (insertAt < rows.value.length && rows.value[insertAt].depth > parent.depth) insertAt += 1
   const next = [...rows.value]
+  const isArrayParent = parent.type === 'array'
   if (!isContainer(parent)) {
     next[index] = { ...parent, type: 'object', value: '' }
   }
+  let siblingCount = 0
+  for (let i = index + 1; i < next.length && next[i].depth > parent.depth; i += 1) {
+    if (next[i].depth === parent.depth + 1) siblingCount += 1
+  }
   next.splice(insertAt, 0, {
-    key: '',
+    key: isArrayParent ? `[${siblingCount}]` : '',
     value: '',
-    type: 'string',
+    type: isArrayParent ? 'object' : 'string',
     depth: parent.depth + 1,
     enabled: true,
   })
@@ -350,6 +366,14 @@ function insertVar(name: string): void {
 .tree-mark {
   color: #94a3b8;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.index-label {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #eef2f7;
+  color: #64748b;
+  font-size: 12px;
 }
 .body-table input,
 .body-table select {
