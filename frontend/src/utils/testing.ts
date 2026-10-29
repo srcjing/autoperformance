@@ -180,7 +180,7 @@ export const DYNAMIC_VALUE_CHIPS: { label: string; token: string; hint: string }
   { label: 'UUID', token: '{{$uuid}}', hint: '随机 UUID' },
   { label: '唯一串', token: '{{$unique}}', hint: 'VU-迭代-时间-随机（全局唯一，适合 code/name）' },
   { label: '时间戳(ms)', token: '{{$ts}}', hint: '毫秒时间戳' },
-  { label: '自增序号', token: '{{$seq}}', hint: '每个 VU 自增 1 开始' },
+  { label: '唯一序号', token: '{{$seq}}', hint: '全局唯一：VU 前缀 + 6 位迭代号（如 1000001、2000001）' },
   { label: '随机整数', token: '{{$randInt(1,999999)}}', hint: '区间内随机整数' },
   { label: '随机数字', token: '{{$randDigits(6)}}', hint: '定长随机数字串' },
   { label: '随机字符串', token: '{{$randStr(8)}}', hint: '定长随机字母数字串' },

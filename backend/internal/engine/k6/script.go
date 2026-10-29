@@ -118,7 +118,7 @@ export const options = {
 const REQUEST_TIMEOUT = {{ js .TimeoutText }};
 const THINK_TIME = {{ .ThinkTimeSeconds }};
 const DYNAMIC_PATTERN = {{ js .DynamicPattern }};
-var SEQ = 0;
+
 
 function randChars(n, alphabet) {
   var out = '';
@@ -142,7 +142,12 @@ function dynamicValue(name, args) {
   if (name === 'ts') { return String(Date.now()); }
   if (name === 'tsSec') { return String(Math.floor(Date.now() / 1000)); }
   if (name === 'now') { return new Date().toISOString(); }
-  if (name === 'seq') { SEQ += 1; return String(SEQ); }
+  if (name === 'seq') {
+    // 全局唯一序号：VU 前缀 + 6 位补零迭代号（k6 无跨 VU 共享计数器）。
+    var iterText = String(__ITER + 1);
+    while (iterText.length < 6) { iterText = '0' + iterText; }
+    return String(__VU) + iterText;
+  }
   if (name === 'randInt') {
     var parts = text.split(',');
     var lo = parseInt(parts[0] || '0', 10);
@@ -167,11 +172,11 @@ function render(tpl) {
   var dynamicCache = {};
   return String(tpl).replace(new RegExp(DYNAMIC_PATTERN, 'g'), function (m, name, args) {
     var cacheKey = name + '(' + (args || '') + ')';
-    if (name !== 'seq' && Object.prototype.hasOwnProperty.call(dynamicCache, cacheKey)) {
+    if (Object.prototype.hasOwnProperty.call(dynamicCache, cacheKey)) {
       return dynamicCache[cacheKey];
     }
     var value = dynamicValue(name, args);
-    if (name !== 'seq') { dynamicCache[cacheKey] = value; }
+    dynamicCache[cacheKey] = value;
     return value;
   });
 }
@@ -313,7 +318,7 @@ const CAPTURE_BODY = {{ .CaptureResponseBody }};
 const VAR_PATTERN = {{ js .VarPattern }};
 const DYNAMIC_PATTERN = {{ js .DynamicPattern }};
 const COOKIE_ORIGIN = {{ js .CookieOrigin }};
-var SEQ = 0;
+
 
 // 随机字符串（用于 uuid/randStr/randDigits）。
 function randChars(n, alphabet) {
@@ -338,7 +343,12 @@ function dynamicValue(name, args) {
   if (name === 'ts') { return String(Date.now()); }
   if (name === 'tsSec') { return String(Math.floor(Date.now() / 1000)); }
   if (name === 'now') { return new Date().toISOString(); }
-  if (name === 'seq') { SEQ += 1; return String(SEQ); }
+  if (name === 'seq') {
+    // 全局唯一序号：VU 前缀 + 6 位补零迭代号（k6 无跨 VU 共享计数器）。
+    var iterText = String(__ITER + 1);
+    while (iterText.length < 6) { iterText = '0' + iterText; }
+    return String(__VU) + iterText;
+  }
   if (name === 'randInt') {
     var parts = text.split(',');
     var lo = parseInt(parts[0] || '0', 10);
@@ -390,11 +400,11 @@ function render(tpl, vars, label) {
   var dynamicCache = {};
   var withDynamic = String(tpl).replace(new RegExp(DYNAMIC_PATTERN, 'g'), function (m, name, args) {
     var cacheKey = name + '(' + (args || '') + ')';
-    if (name !== 'seq' && Object.prototype.hasOwnProperty.call(dynamicCache, cacheKey)) {
+    if (Object.prototype.hasOwnProperty.call(dynamicCache, cacheKey)) {
       return dynamicCache[cacheKey];
     }
     var value = dynamicValue(name, args);
-    if (name !== 'seq') { dynamicCache[cacheKey] = value; }
+    dynamicCache[cacheKey] = value;
     return value;
   });
   return withDynamic.replace(new RegExp(VAR_PATTERN, 'g'), function (m, key) {
