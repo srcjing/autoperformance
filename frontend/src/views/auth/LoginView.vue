@@ -6,22 +6,41 @@
     <form @submit.prevent="onLogin">
       <label class="field">
         <span>用户名</span>
-        <input v-model="username" name="username" autocomplete="username" />
+        <input
+          v-model="username"
+          name="username"
+          autocomplete="username"
+          :disabled="loading"
+          placeholder="请输入用户名"
+        />
       </label>
       <label class="field">
         <span>密码</span>
-        <input v-model="password" name="password" type="password" autocomplete="current-password" />
+        <input
+          v-model="password"
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          :disabled="loading"
+          placeholder="请输入密码"
+        />
       </label>
-      <button type="submit" class="submit">登录</button>
+
+      <p v-if="errorMessage" class="error" role="alert">{{ errorMessage }}</p>
+
+      <button type="submit" class="submit" :disabled="loading">
+        {{ loading ? '登录中…' : '登录' }}
+      </button>
     </form>
 
-    <p class="hint">骨架阶段：任意账号密码点击登录即可进入（后端返回占位 token）。</p>
+    <p class="hint">首次登录需修改初始密码；账号连续登录失败会被临时锁定。</p>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { ApiError } from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
@@ -30,12 +49,36 @@ const auth = useAuthStore()
 
 const username = ref('admin')
 const password = ref('')
+const errorMessage = ref('')
+const loading = ref(false)
 
-function onLogin(): void {
-  // 骨架：占位会话（后续对接 POST /api/v1/auth/login 并回填真实权限集合）
-  auth.setSession('dev-token', { id: '1', username: username.value, name: username.value }, [])
-  const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
-  router.push(redirect)
+async function onLogin(): Promise<void> {
+  if (loading.value) return
+  errorMessage.value = ''
+
+  const name = username.value.trim()
+  if (!name || !password.value) {
+    errorMessage.value = '请输入用户名与密码'
+    return
+  }
+
+  loading.value = true
+  try {
+    const res = await auth.signIn(name, password.value)
+    if (res.must_change_password) {
+      await router.replace({ name: 'change-password' })
+      return
+    }
+    const redirect = typeof route.query.redirect === 'string' && route.query.redirect
+      ? route.query.redirect
+      : auth.homePath
+    await router.replace(redirect)
+  } catch (err) {
+    // 后端统一提示「用户名或密码错误」（20001）；锁定返回 10502 的提示文本。
+    errorMessage.value = err instanceof ApiError ? err.message : '登录失败，请稍后重试'
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -78,6 +121,19 @@ function onLogin(): void {
   font-size: 14px;
 }
 
+.field input:disabled {
+  background: #f3f4f6;
+}
+
+.error {
+  margin: 0 0 14px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
 .submit {
   width: 100%;
   padding: 10px;
@@ -87,6 +143,11 @@ function onLogin(): void {
   color: #fff;
   font-size: 15px;
   cursor: pointer;
+}
+
+.submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .hint {

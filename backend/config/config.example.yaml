@@ -2,6 +2,8 @@ server:
   host: "0.0.0.0"
   port: 8080
   mode: "release"            # debug | release | test
+  static_dir: "./web/dist"   # 内嵌前端静态资源目录（离线部署）
+  tmp_dir: "./data/tmp"      # 临时文件目录
 
 database:
   host: "127.0.0.1"
@@ -14,3 +16,34 @@ database:
 jwt:
   secret: "auto_performance-dev-secret-change-me"   # 生产环境务必通过环境变量覆盖
   expire_seconds: 86400                             # token 有效期（秒）
+
+# 安全 / 密钥（KEK 信封加密，对齐 security-design-report.md DES-I-002）
+security:
+  kek_path: "./data/keys/kek.key"     # 根密钥文件（首次安装生成，0600 权限）
+  report_dir: "./data/reports"        # 报告产物落盘目录
+  secret_key_env: "AUTO_PERF_SECRET_KEY"  # 额外秘密来源环境变量（不硬编码）
+  # 审计链 HMAC 密钥（INV-8 / DES-T-006）：建议显式配置并经 AUTO_PERF_SECURITY_AUDIT_HMAC_KEY 注入；
+  # 留空时依次回退到 secret_key_env 指向的环境变量、JWT secret 派生（仅用于开发环境）。
+  audit_hmac_key: ""
+
+# 报告生成
+report:
+  max_size_bytes: 52428800            # 导入报告文件上限 50MB
+  gen_timeout_seconds: 120            # 生成超时（秒）
+  chromium_path: "chromium"           # headless Chromium 二进制路径
+
+# k6 压测引擎
+k6:
+  binary_path: "k6"                   # k6 二进制路径
+  max_vus: 10000                      # 并发数上限（安全白名单）
+  work_dir: "./data/k6"               # 脚本/结果沙箱目录
+
+# 环境清理器（低权限运行，非 root）
+cleaner:
+  low_priv_uid: 65534                 # nobody
+  low_priv_gid: 65534
+  # 清理可信主机/脚本白名单（DES-T-003）：为空时拒绝一切远程清理（安全默认）。
+  #   allowed_host_ids: 逗号分隔的 ssh_host ID，例如 "1,2"
+  #   allowed_script_hashes: 逗号分隔的 64 位 SHA256（脚本内容哈希）
+  allowed_host_ids: ""
+  allowed_script_hashes: ""

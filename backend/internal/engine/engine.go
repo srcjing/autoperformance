@@ -1,13 +1,15 @@
-// Package engine 引擎适配层：抽象压测引擎接口。
+// Package engine 引擎适配层：抽象压测引擎能力。
 //
-// 对齐 architecture.md §2.2：Engine 接口（Generate/Run/Parse/Stream），
-// 首期实现 k6（子进程 CLI），骨架阶段仅声明接口。
+// 首期实现为 k6 子进程（engine/k6）：BuildScript 生成脚本、Runner 逐参启动子进程并
+// 流式回调输出、Parse 解析 `--out json` 样本。编排器（internal/orchestrator）当前直接
+// 依赖 k6 的强类型 API（ScriptSpec/Run/ParseFile），以换取参数白名单与路径沙箱的类型
+// 安全；Engine 接口保留为多引擎（如多机加压/其他压测器）扩展点，新增引擎时实现该接口
+// 并在编排器中注入，即可复用任务状态机、评估、清理与报告链路。
 package engine
 
 import "context"
 
-// Engine 压测引擎接口（Generate/Run/Parse/Stream）。
-// 实现：k6 子进程；后续如需多机加压，可在此接口上扩展新实现。
+// Engine 压测引擎扩展接口（Generate/Run/Parse/Stream）。
 type Engine interface {
 	// Generate 根据任务上下文生成引擎可执行脚本。
 	Generate(ctx context.Context, spec interface{}) (string, error)

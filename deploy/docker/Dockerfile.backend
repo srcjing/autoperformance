@@ -1,13 +1,77 @@
-# 多阶段构建后端单二进制（骨架占位）
-FROM golang:1.26 AS build
-WORKDIR /src
-COPY backend/ ./backend/
-WORKDIR /src/backend
-# 静态编译，内嵌前端 + 模板
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o /out/auto_performance ./cmd/server
+# syntax=docker/dockerfile:1.7
+# Dockerfile.backend —— 后端单二进制镜像（多阶段，CGO_ENABLED=0 静态编译，内嵌前端与报告模板）。
+#
+# 构建（仓库根目录为上下文）：
+#   docker build -f deploy/docker/Dockerfile.backend -t auto_performance-backend:0.1.0 .
+#
+# 说明：
+#   - 阶段 frontend-build 构建前端产物，阶段 backend-build 将其复制到 backend/web/dist 后
+#     `go:embed` 进单二进制（离线自包含，无需 nginx 也能提供静态资源）；
+#   - 运行镜像以 UID/GID 10001（autoperf）非 root 运行（DES-E-001）；
+#   - 运行期外部依赖（k6 / Chromium / PostgreSQL）不内置于镜像：
+#     容器形态由 docker-compose 挂载离线运行时或用外部数据库（见 docker-compose.yml）。
 
-FROM alpine:3.20
-RUN apk add --no-cache ca-certificates tzdata
-COPY --from=build /out/auto_performance /usr/local/bin/auto_performance
+ARG NODE_IMAGE=node:24-alpine
+ARG GO_IMAGE=golang:1.26.5
+
+# ---------- 阶段 1：前端构建 ----------
+FROM ${NODE_IMAGE} AS frontend-build
+WORKDIR /src/frontend
+RUN apk add --no-cache ca-certificates
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
+
+# ---------- 阶段 2：静态编译后端 ----------
+FROM ${GO_IMAGE} AS backend-build
+ARG VERSION=0.1.0
+WORKDIR /src/backend
+# 先复制依赖清单，最大化层缓存
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+COPY backend/ ./
+# 前端产物 → go:embed 目录（web/embed.go: //go:embed all:dist）
+COPY --from=frontend-build /src/frontend/dist ./web/dist
+RUN CGO_ENABLED=0 GOOS=linux go build \
+      -trimpath -buildvcs=false \
+      -ldflags "-s -w -X main.version=${VERSION}" \
+      -o /out/auto_performance ./cmd/server
+
+# ---------- 阶段 3：运行镜像（非 root） ----------
+FROM alpine:3.20 AS runtime
+ARG VERSION=0.1.0
+RUN apk add --no-cache ca-certificates tzdata \
+ && addgroup -S -g 10001 autoperf \
+ && adduser -S -D -H -u 10001 -G autoperf -h /var/lib/auto_performance autoperf \
+ && mkdir -p /var/lib/auto_performance/tmp \
+             /var/lib/auto_performance/k6 \
+             /var/lib/auto_performance/reports \
+             /var/lib/auto_performance/keys \
+             /etc/auto_performance \
+ && chown -R 10001:10001 /var/lib/auto_performance \
+ && chmod 0750 /var/lib/auto_performance /var/lib/auto_performance/keys
+
+COPY --from=backend-build /out/auto_performance /usr/local/bin/auto_performance
+COPY deploy/docker/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/auto_performance /usr/local/bin/docker-entrypoint.sh
+
+LABEL org.opencontainers.image.title="auto_performance" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.description="性能测试平台后端（内嵌前端，非 root 运行）"
+
+ENV HOME=/var/lib/auto_performance \
+    AUTO_PERF_SERVER_HOST=0.0.0.0 \
+    AUTO_PERF_SERVER_PORT=8080 \
+    AUTO_PERF_SERVER_TMP_DIR=/var/lib/auto_performance/tmp \
+    AUTO_PERF_K6_WORK_DIR=/var/lib/auto_performance/k6 \
+    AUTO_PERF_SECURITY_KEK_PATH=/var/lib/auto_performance/keys/kek.key \
+    AUTO_PERF_SECURITY_REPORT_DIR=/var/lib/auto_performance/reports
+
+USER 10001:10001
 EXPOSE 8080
-ENTRYPOINT ["auto_performance"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["-config", "/etc/auto_performance/config.yaml"]

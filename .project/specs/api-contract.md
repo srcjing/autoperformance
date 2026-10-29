@@ -325,12 +325,45 @@
   ```
   - 并发数必须为正整数且 ≤ 上限（`max_vus`），非法返回 `23004`；接口地址走 URL 白名单。
 
+- `flow` 场景编排子结构（单接口 / 流程测试）：
+  ```json
+  {
+    "test_mode": "single|flow",
+    "capture_response_body": true,
+    "steps": [
+      {
+        "seq": 1,
+        "name": "登录",
+        "interface_id": 3,
+        "scope": "once_per_test|once_per_iteration|every_request",
+        "path": "/api/order?token={{token}}",
+        "headers": {"Authorization": "Bearer {{token}}"},
+        "body": "{\"token\":\"{{token}}\"}",
+        "extract": [
+          {"name": "token", "source": "jsonpath", "expr": "$.data.token"},
+          {"name": "sid", "source": "regex", "expr": "sid=([a-z0-9]+)", "group": 1}
+        ]
+      }
+    ]
+  }
+  ```
+  - `test_mode` 缺省为 `single`；`flow` 模式必须至少一个 `once_per_iteration` 步骤，步骤数 ≤ 50，单步提取规则 ≤ 10。
+  - 步骤 `interface_id` 必须落在任务接口范围内（否则 `10003`）；流程模式下 `interface_ids` 可为空，由步骤自动推导。
+  - 变量作用域由步骤 `scope` 决定：`once_per_test`（整个测试周期一次）/ `once_per_iteration`（每次迭代）/ `every_request`（每个主流程步骤前）。
+  - 路径/请求头/请求体支持 `{{变量名}}` 占位符，运行期由 k6 脚本替换；表达式非法（正则不可编译、JSONPath 未以 `$` 开头）返回 `10003`。
+
 - 处理语义：创建时对「接口范围 + 阈值」**做快照**（`interface_range_snapshot` + `threshold_snapshot`），历史报告可复现；任务状态 `pending`。环境被占用（`testing`）时返回 `23002`（环境互斥，`DES-D-001`）。
 
 **POST /api/v1/tasks/{id}/start** — 执行任务
 
 - 请求参数：无（path `id`）。
 - 语义：`pending → running`；编排器领取任务、生成 k6 脚本、拉起子进程，WebSocket 推送实时进度/日志。非 `pending` 状态返回 `23001`；环境占用返回 `23002`。
+
+**POST /api/v1/tasks/{id}/refresh-snapshot** — 同步接口/阈值快照
+
+- 请求参数：无（path `id`）。
+- 语义：仅 `pending` 任务；按接口最新配置重新快照 `interface_range_snapshot` + `threshold_snapshot`，返回刷新后的任务。非 `pending` 返回 `23001`；接口已被删除导致范围不完整返回 `10003`。
+- 自动同步：`POST /tasks/{id}/start` 在执行前也会先刷新快照，保证压测使用接口最新配置；已开始/已完成任务保留当次快照以保证报告可复现。
 
 **POST /api/v1/tasks/{id}/cancel** — 停止/取消
 
@@ -412,6 +445,9 @@
 - 通用请求参数（query）：`start_time`/`end_time`（时间范围）、`keyword`、`level`(info/warn/error)、分页。
 - 用户日志追加：`admin_id`（操作人）、`action`（动作枚举）、`resource_type`/`resource_id`（关联对象）。
 - 测试日志追加：`task_id`（按任务定位）。
+- 请求详情（`GET /api/v1/logs/request`）：字段含 `method`/`url`/`request_headers`/`request_body`/`response_status`/`response_headers`/`response_body`/`error_code`/`error_message`/`duration_ms`。
+  - 请求头/响应头、请求体/响应体均在 k6 侧或写入前截断至 4KB；`Cookie`/`Authorization`/`Token`/`*Key*`/`Set-Cookie` 等敏感头统一脱敏（`***`）。
+  - 仅在任务开启「采集请求明细」（`flow.capture_response_body=true`）时记录头/体与响应内容，默认关闭以保护压测性能。
 - **安全约束**（对应 `DES-T-001`/`DES-R-001`）：日志为**只读**接口，无删除/修改端点；审计日志 HMAC 链式防篡改，应用层禁止 UPDATE/DELETE；写入前统一脱敏（剥离口令/`Authorization`/私钥特征）。
 
 ---

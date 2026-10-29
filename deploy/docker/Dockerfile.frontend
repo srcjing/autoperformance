@@ -1,9 +1,37 @@
-# 前端构建（骨架占位；正式通过 nginx 服务或内嵌进后端）
-FROM node:24-alpine AS build
-WORKDIR /src
-COPY frontend/ ./
-RUN npm ci && npm run build
+# syntax=docker/dockerfile:1.7
+# Dockerfile.frontend —— 前端镜像（Node 构建 → 静态产物，两种使用形态）。
+#
+# 形态 A（独立服务，compose 默认）：
+#   docker build -f deploy/docker/Dockerfile.frontend --target nginx -t auto_performance-frontend:0.1.0 .
+#
+# 形态 B（产物导出，供「内嵌进后端二进制」流程使用）：
+#   docker build -f deploy/docker/Dockerfile.frontend --target dist -o type=local,dest=./.tmp-web .
+#   # 再把 .tmp-web/web/dist 复制到 backend/web/dist 后执行 go build
+#
+# 说明：Docker 不支持跨 Dockerfile 复用阶段，因此「Node 构建 → 复制到 backend/web 内嵌」
+#       由 Dockerfile.backend 的 frontend-build 阶段原生实现（等价且更直接）；
+#       本文件保留 dist 导出目标，便于 CI 分离构建前端产物或单独调试静态资源。
 
-FROM nginx:alpine
+ARG NODE_IMAGE=node:24-alpine
+
+# ---------- 阶段 1：构建 ----------
+FROM ${NODE_IMAGE} AS build
+WORKDIR /src
+RUN apk add --no-cache ca-certificates
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
+
+# ---------- 阶段 2：产物导出（无运行时） ----------
+FROM scratch AS dist
+COPY --from=build /src/dist /web/dist
+
+# ---------- 阶段 3：独立服务（nginx 反代 /api → backend） ----------
+FROM nginx:1.27-alpine AS nginx
+COPY deploy/docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /src/dist /usr/share/nginx/html
+# nginx 镜像默认以 root 启动 master，再降权到 nginx 用户；容器内仅提供静态资源与反代
 EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q --spider http://127.0.0.1/ || exit 1

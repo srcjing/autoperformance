@@ -6,6 +6,7 @@
 package response
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -28,4 +29,16 @@ func OK(c *gin.Context, data interface{}) {
 // Error 失败响应（HTTP 状态码与 errcode.HTTP 对齐，data=null）。
 func Error(c *gin.Context, e *errcode.Error) {
 	c.JSON(e.HTTP, Body{Code: e.Code, Message: e.Message, Data: nil})
+}
+
+// ErrorFrom 将业务错误统一映射为响应：
+//   - *errcode.Error（含经 %w 包装）原样输出码值与 HTTP 状态；
+//   - 其余（未预期异常）兑底为 10601，避免泄露内部错误细节。
+func ErrorFrom(c *gin.Context, err error) {
+	var e *errcode.Error
+	if errors.As(err, &e) {
+		Error(c, e)
+		return
+	}
+	Error(c, errcode.ErrInternal)
 }

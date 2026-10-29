@@ -20,3 +20,18 @@
 | 2026-10-26 | 新增 | 工程化 | 接口机器化：OpenAPI 3.0 单一数据源（78 接口）+ 自包含可视化页面（自动渲染示例）；错误码解耦规范（全局 1xxxx / 业务 2xxxx 分层 + Register 注册机制） | `api/openapi.json`、`api/index.html`、`specs/errcode.md` | - |
 | 2026-10-26 | 新增 | 工程 | 搭建工程骨架：Go 后端（分层/错误码 1xxxx/中间件链/统一响应）+ Vue3 前端（路由/store/布局/17 页面占位）+ 离线打包脚本；go build/vet、npm install/build/type-check 均通过 | `backend/`、`frontend/`、`deploy/` | - |
 | 2026-10-26 | 新增 | 全局 | 产出实现计划（10 Phase，10 条关键不变量 INV-1~10，核心逻辑 TDD 示例，AC/DFX/红线覆盖索引） | `specs/plan.md` | - |
+| 2026-10-26 | 新增 | 实现 | 按 plan.md 完成全部 10 个 Phase 实现（基础设施/认证分权/环境/产品/测试管理/报告/日志/系统设置/部署打包/联调安全加固），后端 go build/vet/test 与前端 type-check/build 全绿；dev 分支 | `specs/plan.md`、`backend/`、`frontend/`、`deploy/` | dev |
+| 2026-10-28 | 新增 | 测试管理 | 新增测试模式（单接口 `single` / 流程 `flow`）与流程编排：步骤顺序、接口引用、路径/请求头/请求体覆盖、响应变量提取（JSONPath/正则）；步骤作用域三档（once_per_test / once_per_iteration / every_request）对应登录取凭证、主流程流量、每请求刷新；k6 脚本按作用域生成 setup/主流程/每请求前置；前端新增流程步骤编辑器 | `prds/PRD-performance-testing-platform.md` §3.3.6.1、`specs/api-contract.md` §2.4 | dev |
+| 2026-10-28 | 修正 | 测试管理/前端 | 流程编辑体验：可用变量改为可点击 chip（插入光标处）、路径/请求体引用变量高亮、请求头改 Postman 式键值行（接口表单）；新增任务快照同步（待执行任务执行前自动刷新 + 手动 refresh-snapshot），接口配置变更后任务/模板展示与执行同步生效 | `prds/PRD-performance-testing-platform.md`、`specs/api-contract.md` | dev |
+| 2026-10-28 | 修正 | 测试管理 | 流程变量排查能力：k6 输出 AFWARN 行，变量未定义/提取失败写入测试日志（去重 + 上限 100）；前端步骤编辑器对未定义变量红色提示；任务详情新增「流程步骤」表（顺序/接口/作用域/提取/引用） | `specs/api-contract.md` | dev |
+| 2026-10-28 | 修正 | 测试管理 | 请求详情记录实际发送的请求体：k6 AFREQ 回传渲染后 body（≤4KB），流程步骤级 body 覆盖优先；修复 GET 带 body 被丢弃（改 http.request）；JSON 体未声明 Content-Type 时自动补 application/json | `specs/api-contract.md` | dev |
+| 2026-10-28 | 新增 | 日志查询 | 请求详情补记请求头与响应头（migration 000007）：k6 侧对 Cookie/Authorization/Token/*Key*/Set-Cookie 等敏感头脱敏为 ***，均截断 4KB；前端请求详情展开新增「请求头」「响应头」；「采集响应体」开关语义拓展为「采集请求明细」 | `specs/api-contract.md` §2.6 | dev |
+| 2026-10-28 | 修正 | 测试管理 | 前置步骤 Cookie 自动传播：k6 setup 阶段收集响应 Set-Cookie 并注入各 VU cookie jar（解决「登录成功但业务接口报会话过期」——网关会话 = ADMINSESSIONID Cookie + csrfToken 头，k6 cookie jar 不跨 VU 共享） | `prds/PRD-performance-testing-platform.md` §3.3.6.1 | dev |
+| 2026-10-28 | 修正 | 全平台表单 | 请求头/请求体统一为 Postman 式行编辑：HeaderRowsEditor（启用/键/值 + 变量高亮与点击插入）、BodyRowsEditor（路径键值行表达嵌套 attrs.ouId / list[0].id + JSON 预览 + 粘贴 JSON 拆解）、RequestImportDialog（原始 HTTP 报文/JSON 一键识别回填方法/地址/头/体） | `specs/api-contract.md` | dev |
+| 2026-10-28 | 修正 | 测试管理 | Cookie 传播加固：每迭代写回（避免网关轮换出未认证 session 覆盖 jar）、保留 Path/Domain/Secure/HttpOnly、变量键改 __af_cookies 并禁止用户变量使用 __af_ 前缀、setup 未获得 Cookie 时写测试日志告警；定位并清理导致 401 的接口级 Cookie 认证头残留 | `prds/PRD-performance-testing-platform.md` §3.3.6.1 | dev |
+| 2026-10-28 | 修正 | 请求配置 | 请求体改为「键值行 + +嵌套按钮」：容器行（对象/数组）承载子级，不再要求手写 a.b 路径；接口弹窗新增 4 个分区（基本信息/请求头/请求体/超时与描述）；请求头支持粘贴识别填充 | `specs/api-contract.md` | dev |
+| 2026-10-28 | 修正 | 全局交互 | 所有弹窗/抽屉取消「点击遮罩关闭」，只保留关闭/取消按钮，避免误触丢失编辑内容（18 处） | `specs/frontend-structure.md` | dev |
+| 2026-10-28 | 修正 | 请求配置 | 请求体数组元素不再暴露 [0] 下标：改为只读「元素 N」标签，数组行按钮改为「+ 元素」，增删后自动重排下标（[0..n] 无空洞） | `specs/api-contract.md` | dev |
+| 2026-10-29 | 新增 | 请求配置 | 新增内置动态值占位符（{{$uuid}}/{{$unique}}/{{$ts}}/{{$tsSec}}/{{$now}}/{{$seq}}/{{$randInt(a,b)}}/{{$randStr(n)}}/{{$randDigits(n)}}），每次请求重新生成；前端两个编辑器提供可点击 chip | `prds/PRD-performance-testing-platform.md` §3.3.6.1 | dev |
+| 2026-10-29 | 修正 | 请求配置 | 修复 {{$seq}} 在多 VU 下重复：原为每 VU 独立计数器（各 VU 都从 1 开始），改为 VU 前缀 + 6 位迭代号（1000001/2000001…），全局唯一且同 VU 递增；同一字段内重复引用取值一致 | `prds/PRD-performance-testing-platform.md` §3.3.6.1 | dev |
+| 2026-10-29 | 修正 | 请求配置 | 引用变量的参数增加显式标识：行内「变量 / 动态」徽标 + 左侧色条与底色，顶部提供「仅看变量（N）」过滤；请求体与请求头编辑器同时生效 | `specs/frontend-structure.md` | dev |

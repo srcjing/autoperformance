@@ -1,0 +1,25 @@
+-- 逆序 DROP（000001_init_schema.up.sql 的回滚）
+DROP TABLE IF EXISTS test_log;
+DROP TABLE IF EXISTS system_log;
+DROP TABLE IF EXISTS user_log;
+
+DROP TABLE IF EXISTS admin_role;
+DROP TABLE IF EXISTS role_permission;
+DROP TABLE IF EXISTS role;
+DROP TABLE IF EXISTS admin;
+
+DROP TABLE IF EXISTS report_artifact;
+DROP TABLE IF EXISTS test_report;
+DROP TABLE IF EXISTS test_task;
+DROP TABLE IF EXISTS test_template;
+
+DROP TABLE IF EXISTS threshold;
+DROP TABLE IF EXISTS interface;
+DROP TABLE IF EXISTS product;
+
+DROP TABLE IF EXISTS env_tag;
+DROP TABLE IF EXISTS environment;
+DROP TABLE IF EXISTS ssh_host;
+DROP TABLE IF EXISTS certificate;
+DROP TABLE IF EXISTS tag;
+DROP TABLE IF EXISTS environment_category;

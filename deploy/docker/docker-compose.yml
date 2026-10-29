@@ -1,27 +1,117 @@
-services:
-  backend:
-    build:
-      context: ..
-      dockerfile: deploy/docker/Dockerfile.backend
-    ports:
-      - "8080:8080"
-    environment:
-      AUTO_PERF_DATABASE_HOST: postgres
-      AUTO_PERF_DATABASE_USER: postgres
-      AUTO_PERF_DATABASE_PASSWORD: postgres
-      AUTO_PERF_DATABASE_NAME: auto_performance
-      AUTO_PERF_DATABASE_SSLMODE: disable
-    depends_on:
-      - postgres
+# docker-compose.yml —— 容器形态编排（后端 + PostgreSQL + 前端 nginx，卷持久化）。
+#
+# 使用（仓库根目录）：
+#   cp deploy/docker/.env.example deploy/docker/.env   # 修改其中的口令/密钥（不要提交）
+#   docker compose -f deploy/docker/docker-compose.yml --env-file deploy/docker/.env up -d --build
+#   访问 http://127.0.0.1:8088/
+#
+# 离线交付：
+#   docker compose -f deploy/docker/docker-compose.yml --env-file deploy/docker/.env build
+#   docker save -o images.tar auto_performance-backend:<ver> auto_performance-frontend:<ver> postgres:16-alpine
+#   目标机：docker load -i images.tar && docker compose ... up -d（配合离线补充的 k6/Chromium 卷）
+#
+# 安全要点：
+#   - 后端容器非 root（镜像 USER 10001）、no-new-privileges、cap_drop ALL、rootfs 只读；
+#   - KEK 独立命名卷（容器入口首次启动生成 0600），不与业务数据混放；
+#   - 数据库不对外暴露端口；管理端口仅绑定 127.0.0.1（DES-I-001 内网隔离）。
+name: auto_performance
 
+services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: auto_performance
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${AUTO_PERF_DATABASE_NAME:-auto_performance}
+      POSTGRES_USER: ${AUTO_PERF_DATABASE_USER:-autoperf}
+      POSTGRES_PASSWORD: ${AUTO_PERF_DB_PASSWORD:?请在 deploy/docker/.env 中设置 AUTO_PERF_DB_PASSWORD}
+      # 仅本地 socket/容器网内可连，不对外开放端口
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTO_PERF_DATABASE_USER:-autoperf} -d ${AUTO_PERF_DATABASE_NAME:-auto_performance}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.backend
+      args:
+        VERSION: ${VERSION:-0.1.0}
+    image: auto_performance-backend:${VERSION:-0.1.0}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AUTO_PERF_DATABASE_HOST: postgres
+      AUTO_PERF_DATABASE_PORT: "5432"
+      AUTO_PERF_DATABASE_USER: ${AUTO_PERF_DATABASE_USER:-autoperf}
+      AUTO_PERF_DATABASE_PASSWORD: ${AUTO_PERF_DB_PASSWORD:?请在 deploy/docker/.env 中设置 AUTO_PERF_DB_PASSWORD}
+      AUTO_PERF_DATABASE_NAME: ${AUTO_PERF_DATABASE_NAME:-auto_performance}
+      AUTO_PERF_DATABASE_SSLMODE: disable
+      AUTO_PERF_JWT_SECRET: ${AUTO_PERF_JWT_SECRET:?请在 deploy/docker/.env 中设置 AUTO_PERF_JWT_SECRET}
+      AUTO_PERF_SECURITY_AUDIT_HMAC_KEY: ${AUTO_PERF_AUDIT_HMAC_KEY:?请在 deploy/docker/.env 中设置 AUTO_PERF_AUDIT_HMAC_KEY}
+      AUTO_PERF_SECURITY_KEK_PATH: /var/lib/auto_performance/keys/kek.key
+      AUTO_PERF_SECURITY_REPORT_DIR: /var/lib/auto_performance/reports
+      AUTO_PERF_K6_WORK_DIR: /var/lib/auto_performance/k6
+      # 容器内压测/PDF 依赖需挂载离线运行时（见下方 volumes 注释）
+      AUTO_PERF_K6_BINARY_PATH: ${AUTO_PERF_K6_BINARY_PATH:-/opt/auto_performance/bin/k6}
+      AUTO_PERF_REPORT_CHROMIUM_PATH: ${AUTO_PERF_CHROMIUM_PATH:-/opt/auto_performance/runtime/chromium/chrome}
+      HOME: /var/lib/auto_performance
+    volumes:
+      - appdata:/var/lib/auto_performance
+      - kek:/var/lib/auto_performance/keys
+      # 离线运行时（可选）：把离线包解压后的目录挂载进来
+      # - ../offline-pkg/bin/k6:/opt/auto_performance/bin/k6:ro
+      # - ../offline-pkg/runtime/chromium:/opt/auto_performance/runtime/chromium:ro
+    ports:
+      # 仅绑定本机回环：对外统一经 frontend(nginx) 或反向代理暴露
+      - "127.0.0.1:8080:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.frontend
+      target: nginx
+    image: auto_performance-frontend:${VERSION:-0.1.0}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8088:80"
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:rw,noexec,nosuid,size=64m
+      - /var/run:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   pgdata:
+  appdata:
+  kek:

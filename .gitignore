@@ -18,3 +18,15 @@ backend/web/dist/*
 .DS_Store
 Thumbs.db
 *.log
+
+# 构建素材（大二进制，不入库；由构建机从运行时提取/下载）
+deploy/offline/assets/
+deploy/offline/_dl/
+
+
+# 抓包/抓站导出（可能含真实凭据，禁止入库）
+*.har
+*.pcap
+
+# 本地分析脚本/临时产物
+.qagent/
