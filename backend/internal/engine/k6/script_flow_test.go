@@ -138,3 +138,41 @@ func TestFlowScriptCookieInjectionOncePerVU(t *testing.T) {
 		}
 	}
 }
+
+// TestFlowScriptSupportsDynamicValues 流程脚本支持内置动态值（每次请求重新生成）。
+func TestFlowScriptSupportsDynamicValues(t *testing.T) {
+	script, err := BuildScript(flowSpec())
+	if err != nil {
+		t.Fatalf("生成流程脚本失败: %v", err)
+	}
+	for _, want := range []string{
+		"const DYNAMIC_PATTERN =",
+		"function dynamicValue(name, args)",
+		"if (name === 'uuid')",
+		"if (name === 'unique')",
+		"if (name === 'randInt')",
+		"if (name === 'seq')",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("流程脚本缺少 %q", want)
+		}
+	}
+}
+
+// TestSingleScriptSupportsDynamicValues 单接口脚本同样支持内置动态值。
+func TestSingleScriptSupportsDynamicValues(t *testing.T) {
+	script, err := BuildScript(sampleSpec(sampleInterface()))
+	if err != nil {
+		t.Fatalf("生成单接口脚本失败: %v", err)
+	}
+	for _, want := range []string{
+		"const DYNAMIC_PATTERN =",
+		"function dynamicValue(name, args)",
+		"const url = render(req.url);",
+		"const body = req.body ? render(req.body) : null;",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("单接口脚本缺少 %q", want)
+		}
+	}
+}

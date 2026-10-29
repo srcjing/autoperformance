@@ -74,6 +74,8 @@ type scriptView struct {
 	TestMode string
 	// VarPattern 变量占位符正则（由 Go 侧提供 JS 字符串字面量，避免模板中出现区分符）。
 	VarPattern string
+	// DynamicPattern 内置动态值占位符正则（如 {{$uuid}}）。
+	DynamicPattern string
 	// CookieOrigin 步骤请求的 origin（scheme://host:port），用于把 setup 阶段拿到的
 	// 会话 Cookie 注入各 VU 的 cookie jar。
 	CookieOrigin string
@@ -115,6 +117,64 @@ export const options = {
 
 const REQUEST_TIMEOUT = {{ js .TimeoutText }};
 const THINK_TIME = {{ .ThinkTimeSeconds }};
+const DYNAMIC_PATTERN = {{ js .DynamicPattern }};
+var SEQ = 0;
+
+function randChars(n, alphabet) {
+  var out = '';
+  for (var i = 0; i < n; i += 1) { out += alphabet.charAt(Math.floor(Math.random() * alphabet.length)); }
+  return out;
+}
+
+// 内置动态值：每次请求重新生成（uuid/唯一串/时间/随机数/自增）。
+function dynamicValue(name, args) {
+  var text = args ? String(args).trim() : '';
+  if (name === 'uuid') {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.floor(Math.random() * 16);
+      var v = c === 'x' ? r : ((r & 0x3) | 0x8);
+      return v.toString(16);
+    });
+  }
+  if (name === 'unique') {
+    return __VU + '-' + __ITER + '-' + Date.now().toString(36) + '-' + randChars(4, 'abcdefghijklmnopqrstuvwxyz0123456789');
+  }
+  if (name === 'ts') { return String(Date.now()); }
+  if (name === 'tsSec') { return String(Math.floor(Date.now() / 1000)); }
+  if (name === 'now') { return new Date().toISOString(); }
+  if (name === 'seq') { SEQ += 1; return String(SEQ); }
+  if (name === 'randInt') {
+    var parts = text.split(',');
+    var lo = parseInt(parts[0] || '0', 10);
+    var hi = parseInt(parts[1] || '9999', 10);
+    if (!(hi > lo)) { hi = lo + 9999; }
+    return String(lo + Math.floor(Math.random() * (hi - lo + 1)));
+  }
+  if (name === 'randStr') {
+    var len = parseInt(text || '8', 10);
+    if (!(len > 0)) { len = 8; }
+    return randChars(len, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789');
+  }
+  if (name === 'randDigits') {
+    var digits = parseInt(text || '6', 10);
+    if (!(digits > 0)) { digits = 6; }
+    return randChars(digits, '0123456789');
+  }
+  return '';
+}
+
+function render(tpl) {
+  var dynamicCache = {};
+  return String(tpl).replace(new RegExp(DYNAMIC_PATTERN, 'g'), function (m, name, args) {
+    var cacheKey = name + '(' + (args || '') + ')';
+    if (name !== 'seq' && Object.prototype.hasOwnProperty.call(dynamicCache, cacheKey)) {
+      return dynamicCache[cacheKey];
+    }
+    var value = dynamicValue(name, args);
+    if (name !== 'seq') { dynamicCache[cacheKey] = value; }
+    return value;
+  });
+}
 
 // hasHeader 判断请求头是否存在（名称大小写不敏感）。
 function hasHeader(headers, name) {
@@ -167,17 +227,21 @@ const REQUESTS = [
 export default function () {
   for (const req of REQUESTS) {
     // interface_id 标签用于把每条请求样本归属到具体接口（请求详情日志）。
+    const url = render(req.url);
+    const headers = {};
+    for (const key in req.headers) { headers[key] = render(req.headers[key]); }
+    const body = req.body ? render(req.body) : null;
     const params = {
-      headers: withContentType(req.headers, req.body),
+      headers: withContentType(headers, body),
       tags: { interface_id: req.interfaceId },
     };
     if (REQUEST_TIMEOUT) { params.timeout = REQUEST_TIMEOUT; }
     let res;
     // GET 无请求体才用 http.get；带体时必须用 http.request（http.get 会丢弃 body）。
-    if (req.method === 'GET' && !req.body) {
-      res = http.get(req.url, params);
+    if (req.method === 'GET' && !body) {
+      res = http.get(url, params);
     } else {
-      res = http.request(req.method, req.url, req.body, params);
+      res = http.request(req.method, url, body, params);
     }
     check(res, { 'status is 2xx-3xx': (r) => r.status >= 200 && r.status < 400 });
 {{- if .CaptureResponseBody }}
@@ -185,11 +249,11 @@ export default function () {
       console.log('AFREQ|' + JSON.stringify({
         i: req.interfaceId,
         m: req.method,
-        u: req.url,
+        u: url,
         s: res.status,
         d: Math.round(res.timings.duration),
         e: res.error || '',
-        rb: req.body ? String(req.body).slice(0, 4096) : '',
+        rb: body ? String(body).slice(0, 4096) : '',
         rq: JSON.stringify(maskHeaders(params.headers)),
         rs: JSON.stringify(maskHeaders(res.headers)),
         b: (res.body === null || res.body === undefined) ? '' : String(res.body).slice(0, 4096),
@@ -247,7 +311,53 @@ const REQUEST_TIMEOUT = {{ js .TimeoutText }};
 const THINK_TIME = {{ .ThinkTimeSeconds }};
 const CAPTURE_BODY = {{ .CaptureResponseBody }};
 const VAR_PATTERN = {{ js .VarPattern }};
+const DYNAMIC_PATTERN = {{ js .DynamicPattern }};
 const COOKIE_ORIGIN = {{ js .CookieOrigin }};
+var SEQ = 0;
+
+// 随机字符串（用于 uuid/randStr/randDigits）。
+function randChars(n, alphabet) {
+  var out = '';
+  for (var i = 0; i < n; i += 1) { out += alphabet.charAt(Math.floor(Math.random() * alphabet.length)); }
+  return out;
+}
+
+// 内置动态值：每次请求渲染时重新生成（uuid/唯一串/时间/随机数/自增）。
+function dynamicValue(name, args) {
+  var text = args ? String(args).trim() : '';
+  if (name === 'uuid') {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.floor(Math.random() * 16);
+      var v = c === 'x' ? r : ((r & 0x3) | 0x8);
+      return v.toString(16);
+    });
+  }
+  if (name === 'unique') {
+    return __VU + '-' + __ITER + '-' + Date.now().toString(36) + '-' + randChars(4, 'abcdefghijklmnopqrstuvwxyz0123456789');
+  }
+  if (name === 'ts') { return String(Date.now()); }
+  if (name === 'tsSec') { return String(Math.floor(Date.now() / 1000)); }
+  if (name === 'now') { return new Date().toISOString(); }
+  if (name === 'seq') { SEQ += 1; return String(SEQ); }
+  if (name === 'randInt') {
+    var parts = text.split(',');
+    var lo = parseInt(parts[0] || '0', 10);
+    var hi = parseInt(parts[1] || '9999', 10);
+    if (!(hi > lo)) { hi = lo + 9999; }
+    return String(lo + Math.floor(Math.random() * (hi - lo + 1)));
+  }
+  if (name === 'randStr') {
+    var len = parseInt(text || '8', 10);
+    if (!(len > 0)) { len = 8; }
+    return randChars(len, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789');
+  }
+  if (name === 'randDigits') {
+    var digits = parseInt(text || '6', 10);
+    if (!(digits > 0)) { digits = 6; }
+    return randChars(digits, '0123456789');
+  }
+  return '';
+}
 
 // collectCookies 收集响应下发/更新的 Cookie（保留 Path/Domain/Secure/HttpOnly 属性）。
 function collectCookies(res, into) {
@@ -274,9 +384,20 @@ function warn(key, message) {
   try { console.log('AFWARN|' + JSON.stringify({ k: key, m: message })); } catch (e) { /* 忽略 */ }
 }
 
-// 将步骤字符串中的变量占位符替换为运行期变量值（缺失时告警并按空串发送）。
+// 渲染步骤字符串：先替换内置动态值（每次请求重新生成），再替换提取变量。
 function render(tpl, vars, label) {
-  return String(tpl).replace(new RegExp(VAR_PATTERN, 'g'), function (m, key) {
+  // 同一字段内重复引用同一动态值取相同结果；不同请求重新生成。
+  var dynamicCache = {};
+  var withDynamic = String(tpl).replace(new RegExp(DYNAMIC_PATTERN, 'g'), function (m, name, args) {
+    var cacheKey = name + '(' + (args || '') + ')';
+    if (name !== 'seq' && Object.prototype.hasOwnProperty.call(dynamicCache, cacheKey)) {
+      return dynamicCache[cacheKey];
+    }
+    var value = dynamicValue(name, args);
+    if (name !== 'seq') { dynamicCache[cacheKey] = value; }
+    return value;
+  });
+  return withDynamic.replace(new RegExp(VAR_PATTERN, 'g'), function (m, key) {
     if (vars[key] === undefined || vars[key] === null) {
       warn(label + ':' + key, label + ' 引用变量 ' + key + ' 未定义，已按空值发送');
       return '';
@@ -537,6 +658,7 @@ func BuildScript(spec ScriptSpec) (string, error) {
 		ThinkTimeSeconds:    params.ThinkTime.Seconds(),
 		CaptureResponseBody: spec.Flow.CaptureResponseBody,
 		VarPattern:          `\{\{\s*([A-Za-z0-9_]+)\s*\}\}`,
+		DynamicPattern:      `\{\{\s*\$([A-Za-z][A-Za-z0-9]*)\s*(?:\(([^{}]*)\))?\s*\}\}`,
 		Requests:            make([]scriptRequest, 0, len(spec.Interfaces)),
 	}
 	for _, st := range params.Stages {

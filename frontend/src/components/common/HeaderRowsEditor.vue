@@ -30,6 +30,21 @@
       </div>
     </div>
 
+    <div class="var-hint">
+      <span class="ap-muted">内置动态值（每次请求重新生成，点击插入）：</span>
+      <button
+        v-for="item in DYNAMIC_VALUE_CHIPS"
+        :key="item.token"
+        type="button"
+        class="var-chip dyn-chip"
+        :disabled="disabled"
+        :title="item.hint"
+        @click="insertRaw(item.token)"
+      >
+        {{ item.label }}
+      </button>
+    </div>
+
     <div v-if="variables && variables.length > 0" class="var-hint">
       <span class="ap-muted">可用变量（点击插入到当前输入框）：</span>
       <button
@@ -106,6 +121,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { DYNAMIC_VALUE_CHIPS } from '@/utils/testing'
 
 // 请求头行式编辑器（Postman 风格：启用 / 键 / 值），值支持 {{变量}} 与点击插入。
 const props = defineProps<{
@@ -217,6 +233,25 @@ function usedVars(text: string): string[] {
   if (!text) return []
   for (const match of text.matchAll(VAR_RE)) names.add(match[1])
   return [...names]
+}
+
+function insertRaw(token: string): void {
+  const el = focusRef.value
+  if (!el) {
+    const last = rows.value[rows.value.length - 1]
+    if (last) { last.value = `${last.value}${token}` }
+    emitRows()
+    return
+  }
+  const start = el.selectionStart ?? el.value.length
+  const end = el.selectionEnd ?? start
+  el.value = el.value.slice(0, start) + token + el.value.slice(end)
+  el.dispatchEvent(new Event('input'))
+  requestAnimationFrame(() => {
+    el.focus()
+    const pos = start + token.length
+    el.setSelectionRange(pos, pos)
+  })
 }
 
 function insertVar(name: string): void {

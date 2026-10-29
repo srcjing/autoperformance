@@ -175,6 +175,17 @@ export function formatMetricValue(value: number | null | undefined, digits = 2):
   return value.toFixed(digits)
 }
 
+/** 内置动态值（每次请求重新生成，用于 body/header 参数化）。 */
+export const DYNAMIC_VALUE_CHIPS: { label: string; token: string; hint: string }[] = [
+  { label: 'UUID', token: '{{$uuid}}', hint: '随机 UUID' },
+  { label: '唯一串', token: '{{$unique}}', hint: 'VU-迭代-时间-随机（全局唯一，适合 code/name）' },
+  { label: '时间戳(ms)', token: '{{$ts}}', hint: '毫秒时间戳' },
+  { label: '自增序号', token: '{{$seq}}', hint: '每个 VU 自增 1 开始' },
+  { label: '随机整数', token: '{{$randInt(1,999999)}}', hint: '区间内随机整数' },
+  { label: '随机数字', token: '{{$randDigits(6)}}', hint: '定长随机数字串' },
+  { label: '随机字符串', token: '{{$randStr(8)}}', hint: '定长随机字母数字串' },
+]
+
 /** 流程步骤作用域展示文案（前端展示/任务详情统一口径）。 */
 export const FLOW_SCOPE_LABELS: Record<FlowStepScope, string> = {
   once_per_test: '前置（整周期一次）',
